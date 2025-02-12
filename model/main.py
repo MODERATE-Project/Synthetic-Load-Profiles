@@ -112,6 +112,7 @@ class GAN(nn.Module):
                 # Train generator
                 for idx in range(self.loopCountGen):
                     self.Gen.zero_grad()
+                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
                     xFake = self.Gen(noise)
                     yFakeNew = self.Dis(xFake)
                     lossGen = self.lossFct(yFakeNew, labelsReal).clone()

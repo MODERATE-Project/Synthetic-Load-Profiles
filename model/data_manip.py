@@ -3,7 +3,7 @@ import numpy as np
 import csv
 
 
-def add_zeros_rows(df: pd.DataFrame, dayCount: int) -> pd.DataFrame:
+def add_filler_rows(df: pd.DataFrame, dayCount: int) -> pd.DataFrame:
     """Appends additional rows to the input dataframe in the case that the number\n
     of days (which equals the number of rows of `df` divided by 24) is lower than\n
     `dayCount`.
@@ -17,16 +17,20 @@ def add_zeros_rows(df: pd.DataFrame, dayCount: int) -> pd.DataFrame:
             the Discriminator need to be adapted accordingly. 
 
     Raises:
-        ValueError: An error is produced if the number of days exceeds `dayCount`.
+        ValueError: An error is produced if the number of days exceeds `dayCount` or is below 365.
 
     Returns:
-        pd.DataFrame: An updated dataframe with additional rows containing zeros.
+        pd.DataFrame: An updated dataframe with additional filler rows.
     """
     addRowCount = 24*dayCount - df.shape[0]
     if addRowCount < 0:
-        raise ValueError(f'The maximum amount of days allowed is {dayCount}!')
-    df_zeros = pd.DataFrame(np.zeros((addRowCount, df.shape[1])), columns = df.columns)
-    df = pd.concat([df, df_zeros])
+        raise ValueError(f'The maximum amount of days allowed is {dayCount} (= {dayCount*24} rows)!')
+    maxAddRowCount = (dayCount - 365)*24
+    if addRowCount > maxAddRowCount:
+        raise ValueError(f'A minimum amount of 365 days (= 8760 rows) is required!')
+    df_addRows = df[maxAddRowCount - addRowCount: maxAddRowCount]
+    df_addRows.index = ['#####' + str(idx) for idx in range(len(df_addRows))]
+    df = pd.concat([df, df_addRows])
     return df
 
 
@@ -110,7 +114,7 @@ def invert_min_max_scaler(arr_scaled: np.ndarray, arr_minMax: np.ndarray, featur
 
 def data_prep_wrapper(df: pd.DataFrame, dayCount: int, featureRange: tuple[int, int]) -> tuple:
     """A wrapper calling the following functions in the specified order:
-    * `add_zeros_rows`
+    * `add_filler_rows`
     * `df_to_arr`
     * `reshape_arr`
     * `min_max_scaler`
@@ -128,7 +132,7 @@ def data_prep_wrapper(df: pd.DataFrame, dayCount: int, featureRange: tuple[int, 
         tuple[np.ndarray, pd.Index, np.ndarray]: Resulting array, index of the dataframe,\n
         array containing the minimum and the maximum value.
     """
-    df = add_zeros_rows(df, dayCount)
+    df = add_filler_rows(df, dayCount)
     arr, dfIdx = df_to_arr(df)
     arr = reshape_arr(arr, dayCount)
     arr, arr_minMax = min_max_scaler(arr, featureRange)
@@ -148,15 +152,27 @@ def get_sep(path):
         sep = csv.Sniffer().sniff(file.read()).delimiter
         return sep
 
+####################################################################################################
+################################# Optional (for removing outliers) #################################
+####################################################################################################
 
-def get_sep_marimo(data):
-    """Determines the separator used in a CSV file for the marimo notebook.
+def limit_load_sums(series, alpha):
+    colsToRemove = set(series[(series < np.quantile(series, alpha/2)) | (series > np.quantile(series, 1 - alpha/2))].index)
+    return colsToRemove
 
-    Args:
-        data (_io.StringI): Data object from marimo file uploader.
 
-    Returns:
-        str: The separator.
-    """
-    sep = csv.Sniffer().sniff(data.getvalue()).delimiter
-    return sep
+def find_outliers(series):
+    q1, q3 = series.quantile(0.25), series.quantile(0.75)
+    IQR = q3 - q1
+    colsToRemove = set(series[(series < q1 - 1.5*IQR) | (series > q3 + 1.5*IQR)].index)
+    return colsToRemove
+
+
+def outlier_removal_wrapper(df, alpha):
+    loadSums = df.sum()
+    initialColCount = df.shape[1]
+    colsToRemove = limit_load_sums(loadSums, alpha) | find_outliers(df.max())
+    df = df.drop(columns = colsToRemove)
+    print(f'Outlier detection: {len(colsToRemove)} profiles were removed \
+        ({initialColCount} → {initialColCount - len(colsToRemove)}).')
+    return df
