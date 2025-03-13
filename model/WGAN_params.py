@@ -1,12 +1,11 @@
 import torch
-from torch import nn
 
 
-# Parameters and their default values
+# WGAN parameters and their default values
 params = {
     'batchSize': 40,
     'device': torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu'),
-    'lossFct': nn.BCELoss(),
+    'lambdaGP': 10,
     'lrGen': 1e-4/3.25,
     'lrDis': 1e-4/2.25,
     'betas': (0.5, 0.999),

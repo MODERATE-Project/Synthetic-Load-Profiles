@@ -1,3 +1,4 @@
+from typing import Literal
 from torch import nn, optim, float32, full, randn
 from torch.utils.data import DataLoader
 import pandas as pd
@@ -8,7 +9,6 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.layers import layersGen, layersDis
 from model.plot import create_plots
 
 
@@ -42,6 +42,7 @@ class GAN(nn.Module):
             dataset,
             params,
             outputPath,
+            modelType: Literal['GAN', 'WGAN'],
             modelStatePath = None,
             wandb = None,
             useMarimo = False
@@ -52,6 +53,11 @@ class GAN(nn.Module):
             data_prep_wrapper(df = self.inputDataset, dayCount = DAY_COUNT, featureRange = FEATURE_RANGE)
         self.params = params
         self.outputPath = outputPath
+        self.modelType = modelType
+        if self.modelType in ['GAN', 'WGAN']:
+            print(f"Using '{self.modelType}'.")
+        else:
+            raise ValueError(f"'{self.modelType}' is not a supported model type ['GAN', 'WGAN'].")
         self.modelStatePath = modelStatePath
         self.wandb = wandb
         self.useMarimo = useMarimo
@@ -60,7 +66,11 @@ class GAN(nn.Module):
         for key, value in self.params.items():
             setattr(self, key, value)
 
-        # Get layers from `layers.py`
+        # Get layers
+        if self.modelType == 'GAN':
+            from model.GAN_layers import layersGen, layersDis
+        elif self.modelType == 'WGAN':
+            from model.WGAN_layers import layersGen, layersDis
         self.layersGen, self.layersDis = layersGen, layersDis
 
         # Create DataLoader object
@@ -111,9 +121,13 @@ class GAN(nn.Module):
         else:
             import marimo as mo
             progress = mo.status.progress_bar(range(self.epochCount))
-        
+
+        # Training loop
         for epoch in progress:
-            loss_dict = {'_Dis.loss.real': 0, '_Dis.loss.fake': 0, '_Gen.loss': 0}
+            if self.modelType == 'GAN':
+                loss_dict = {'_Dis.loss.real': 0, '_Dis.loss.fake': 0, '_Gen.loss': 0}
+            elif self.modelType == 'WGAN':
+                loss_dict = {'_Dis.loss': 0, '_Gen.loss': 0}
             gradDis_dict, gradGen_dict = {}, {}
 
             # Deactivate dropout layers in generator
@@ -122,25 +136,46 @@ class GAN(nn.Module):
                     if isinstance(module, nn.Dropout2d):
                         module.p = 0
             
+            # Batch loop
             for batchIdx, data in enumerate(self.dataLoader):
                 xReal = data.to(device = self.device, dtype = float32)
 
-                # Create label vectors
-                labelsReal = full(size = (xReal.shape[0],), fill_value = self.labelReal, dtype = float32, device = self.device)
-                labelsFake = full(size = (xReal.shape[0],), fill_value = self.labelFake, dtype = float32, device = self.device)
+                # Train discriminator
+                if self.modelType == 'GAN':
+                    # Create label vectors
+                    labelsReal = full(size = (xReal.shape[0],), fill_value = self.labelReal, dtype = float32, device = self.device)
+                    labelsFake = full(size = (xReal.shape[0],), fill_value = self.labelFake, dtype = float32, device = self.device)
 
-                # Train discriminator with real data
-                self.Dis.zero_grad()
-                yReal = self.Dis(xReal)
-                lossDisReal = self.lossFct(yReal, labelsReal)
-                lossDisReal.backward()
+                    # Train discriminator with real data
+                    self.Dis.zero_grad()
+                    yReal = self.Dis(xReal)
+                    lossDisReal = self.lossFct(yReal, labelsReal)
+                    lossDisReal.backward()
 
-                # Train discriminator with fake data
-                noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
-                xFake = self.Gen(noise)
-                yFake = self.Dis(xFake.detach())
-                lossDisFake = self.lossFct(yFake, labelsFake)
-                lossDisFake.backward()
+                    # Train discriminator with fake data
+                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
+                    xFake = self.Gen(noise)
+                    yFake = self.Dis(xFake.detach())
+                    lossDisFake = self.lossFct(yFake, labelsFake)
+                    lossDisFake.backward()
+                
+                elif self.modelType == 'WGAN':
+                    # Generate fake data
+                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
+                    xFake = self.Gen(noise).detach()
+
+                    # Compute discriminator loss
+                    self.Dis.zero_grad()
+                    yReal = self.Dis(xReal)
+                    yFake = self.Dis(xFake)
+                    lossDis = yFake.mean() - yReal.mean()
+
+                    # Compute gradient penalty
+                    GP = self.compute_gradient_penalty(self.Dis, xReal, xFake, self.device)
+
+                    # Add penalty term to loss
+                    lossDisTotal = lossDis + self.lambdaGP*GP
+                    lossDisTotal.backward()
 
                 # Update logged gradients of discriminator
                 for moduleName, module in self.Dis.named_modules():
@@ -161,8 +196,14 @@ class GAN(nn.Module):
                     noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
                     xFake = self.Gen(noise)
                     yFakeNew = self.Dis(xFake)
-                    lossGen = self.lossFct(yFakeNew, labelsReal).clone()
-                    lossGen.backward(retain_graph = True if idx < self.genLoopCount - 1 else False)
+
+                    if self.modelType == 'GAN':
+                        lossGen = self.lossFct(yFakeNew, labelsReal).clone()
+                        lossGen.backward(retain_graph = True if idx < self.genLoopCount - 1 else False)
+
+                    elif self.modelType == 'WGAN':
+                        lossGen = -yFakeNew.mean()
+                        lossGen.backward()
                 
                     # Update logged gradients of generator
                     if idx == 0:
@@ -175,12 +216,15 @@ class GAN(nn.Module):
                                     else:
                                         gradGen_dict[key] += param.grad.norm().cpu().item()
 
-                # Update weights and biases of the generator
-                self.optimGen.step()
+                    # Update weights and biases of the generator
+                    self.optimGen.step()
 
                 # Update logged losses
-                loss_dict['_Dis.loss.real'] += lossDisReal.cpu().item()
-                loss_dict['_Dis.loss.fake'] += lossDisFake.cpu().item()
+                if self.modelType == 'GAN':
+                    loss_dict['_Dis.loss.real'] += lossDisReal.cpu().item()
+                    loss_dict['_Dis.loss.fake'] += lossDisFake.cpu().item()
+                elif self.modelType == 'WGAN':
+                    loss_dict['_Dis.loss'] += lossDisTotal.cpu().item()
                 loss_dict['_Gen.loss'] += lossGen.cpu().item()
 
             # Log progress (average losses and gradient norms per epoch)
@@ -220,6 +264,28 @@ class GAN(nn.Module):
         # Save logged parameters
         df_log = pd.DataFrame(logs)
         df_log.to_csv(self.logPath / 'log.csv', index = False)
+
+    def compute_gradient_penalty(self, model, xReal, xFake, device):
+        """Computes the gradient penalty for the WGAN method."""
+        epsilon = torch.rand(xReal.shape[0], 1, 1, 1, device = device)  #interpolation factor
+        interpolated = (epsilon*xReal + (1 - epsilon)*xFake).requires_grad_(True)
+
+        # Compute critic output on interpolated samples
+        interpolatedOutput = model(interpolated)
+
+        # Compute gradients w.r.t. the interpolated samples
+        gradients = torch.autograd.grad(
+            outputs = interpolatedOutput,
+            inputs = interpolated,
+            grad_outputs = torch.ones_like(interpolatedOutput, requires_grad = False),
+            create_graph = True,
+            retain_graph = True
+        )[0]
+
+        # Compute the norm of the gradients
+        gradNorm = gradients.view(xReal.shape[0], -1).norm(2, dim = 1)
+        GP = torch.mean((gradNorm - 1)**2)
+        return GP
 
     def save_model_state(self, epoch, path):
         model = {
