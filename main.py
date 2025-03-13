@@ -1,6 +1,7 @@
 import wandb
 from datetime import datetime
 from pathlib import Path
+
 from model.main import GAN, generate_data_from_saved_model, export_synthetic_data
 
 
@@ -22,10 +23,10 @@ def run(params, projectName, inputFile, useWandb, modelPath, createData, useMari
         outputPath.mkdir(parents = True, exist_ok = True)
         model = GAN(
             dataset = inputFile,
-            outputPath = outputPath,
             params = params,
-            wandb = wandb,
+            outputPath = outputPath,
             modelStatePath = modelPath,
+            wandb = wandb,
             useMarimo = useMarimo
         )
         model.train()

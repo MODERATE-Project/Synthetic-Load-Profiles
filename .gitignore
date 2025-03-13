@@ -3,25 +3,20 @@ runs/
 wandb/
 .venv/
 
-TODOS.txt
 
+*.0
 *.csv
-*.png
-*.gzip
-*.xml
 *.crypt
-*.xlsx
+*.exe.lnk
+*.gv
+*.gzip
 *.iml
 *.ipynb
-*.exe.lnk
-*.zip
-*.pt
 *.npy
-*.0
-*.gv
 *.patch
 *.pickle
-
-!*/sample_data/opendata_fluvius/P6269_1_50_DMK_Sample_Elek_Volume_Afname_kWh_HP_resampled.csv
-!/readme/Example_CSV_structure.png
-!/readme/Marimo_Run.png
+*.png
+*.pt
+*.xml
+*.xlsx
+*.zip
