@@ -17,7 +17,7 @@ def run(params, projectName, inputFile, useWandb, modelPath, createData, useMari
             mode = 'online' if useWandb else 'offline'
         )
         modelName = wandb.run.name
-        runNameTSSuffix = datetime.today().strftime('%Y_%m_%d_%H%M%S%f')[:-3]   #added to the end of the run name
+        runNameTSSuffix = datetime.today().strftime('%Y-%m-%d-%H%M%S%f')[:-3]   #added to the end of the run name
         runName = f'{modelName}_{runNameTSSuffix}' if len(modelName) > 0 else runNameTSSuffix
         outputPath = Path().absolute() / 'runs' / projectName / runName
         outputPath.mkdir(parents = True, exist_ok = True)

@@ -86,9 +86,10 @@ class GAN(nn.Module):
         # Continue training existing model
         if self.modelStatePath:
             with gzip.open(self.modelStatePath, 'rb') as file:
-                self.modelState = torch.load(file)
+                self.modelState = torch.load(file, weights_only = False)
             if not (self.dfIdx == self.modelState['dfIdx']).all():
                 raise ValueError('Timestamps do not match!')
+            print('Successfully imported existing model!')
             
             # Adjust min and max values
             self.arr_minMaxOld = self.modelState['minMax']

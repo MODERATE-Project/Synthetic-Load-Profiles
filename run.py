@@ -7,7 +7,7 @@ from main import run
 ####################################################################################################
 
 # Project name
-PROJECT_NAME = 'test'
+PROJECT_NAME = 'test_continue'
 
 # Input file path
 INPUT_PATH = Path.cwd() / 'data' / 'smart_meters_london_resampled.csv'
@@ -19,7 +19,7 @@ OUTPUT_FORMAT = '.npy'
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 800
+EPOCH_COUNT = 100
 
 # Change the result save frequency; save all samples/models in addition to visualizations
 SAVE_FREQ = 50
@@ -30,6 +30,7 @@ SAVE_SAMPLES = True
 ####################################################################################################
 
 # Model state path (optional, for continuation of training or generation of data)
+#MODEL_PATH = r'C:/Users/Arbeit/Projekte/Git/GAN/runs/test_continue/chocolate-lion-220_2025-03-13-123914890/models/epoch_100/epoch_100.pt.gz'
 MODEL_PATH = None
 
 # Create synthetic data from existing model (if True, there is no training)
