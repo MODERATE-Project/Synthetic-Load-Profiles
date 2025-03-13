@@ -5,7 +5,7 @@ import numpy as np
 
 
 def plot_distrib(df_real, df_synth):
-    fig = plt.figure(figsize = (3.5, 5))
+    fig = plt.figure(figsize = (7, 5))
     plt.hist(df_real.to_numpy().flatten(), bins = 100, alpha = 0.5, label = 'Real', color = 'aqua')
     plt.hist(df_synth.to_numpy().flatten(), bins = 100, alpha = 0.5, label = 'Synthetic', color = 'hotpink')
     plt.title('Value distributions', fontweight = 'bold')
