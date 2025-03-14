@@ -160,12 +160,18 @@ def create_plots(df_real, arr_synth, outputPath):
 
 def create_html(path):
   path =  path
-
+  import re
+  
+  def custom_sort_key(s):
+      # Extract numbers from the string
+      numbers = [int(num) for num in re.findall(r'\d+', s)]
+      return (numbers[0] if numbers else float('inf'), s)
+  
   # Get image paths
   imageSets = {}
   plotTypes = ['daily_trend', 'distrib_all_profiles', 'hourly_trend', 'mean_profiles', 'monthly_trend', 'stats_all_profiles', 'weekly_trend']
   for item in plotTypes:
-      imageSets[item] = [Path(*imgPath.parts[-2:]) .as_posix() for imgPath in path.rglob('*') if item in str(imgPath) and imgPath.is_file()]
+      imageSets[item] = sorted([Path(*imgPath.parts[-2:]) .as_posix() for imgPath in path.rglob('*') if item in str(imgPath) and imgPath.is_file()], key=custom_sort_key)
   imageSets_json = json.dumps(imageSets)
 
   # Create the HTML content
