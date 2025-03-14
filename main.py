@@ -31,3 +31,4 @@ def run(params, modelType, projectName, inputFile, useWandb, modelPath, createDa
             useMarimo = useMarimo
         )
         model.train()
+        wandb.finish()
