@@ -7,7 +7,7 @@ from model.main import DAY_COUNT
 def detailed_hook(layer_name):
     def hook(module, input, output):
         print(f"\nLayer {layer_name}")
-        print(f"  Input shape: ({input[0].shape[2]} × {input[0].shape[3]}) → Output shape: ({output.shape[2]} × {output.shape[3]})")
+        print(f"  Input shape: ({input[0].shape[-2]} × {input[0].shape[-1]}) → Output shape: ({output.shape[-2]} × {output.shape[-1]})")
         if isinstance(module, nn.Sequential):
             for sublayer in module:
                 if isinstance(sublayer, nn.ConvTranspose2d):
