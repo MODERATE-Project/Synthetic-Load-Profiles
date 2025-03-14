@@ -6,24 +6,25 @@ from main import run
 ####################################################################################################
 
 # Model type ('GAN' or 'WGAN')
-MODEL_TYPE = 'WGAN'
+MODEL_TYPE = 'GAN'
 
 ####################################################################################################
 
 # Project name
-PROJECT_NAME = 'WGAN_test'
+PROJECT_NAME = 'GAN_VITO_800'
 
 # Input file path
+#INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
 INPUT_PATH = Path.cwd() / 'data' / 'smart_meters_london_resampled.csv'
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
-USE_WANDB = False
+USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 5
+EPOCH_COUNT = 200
 
 # Change the result save frequency; save all samples/models in addition to visualizations
 SAVE_FREQ = 50
@@ -54,4 +55,5 @@ if __name__ == '__main__':
     params['saveSamples'] = SAVE_SAMPLES
     inputFile = pd.read_csv(INPUT_PATH, sep = get_sep(INPUT_PATH))
     inputFile = inputFile.set_index(inputFile.columns[0])
+    inputFile.index = pd.to_datetime(inputFile.index, format = 'mixed')
     run(params, MODEL_TYPE, PROJECT_NAME, inputFile, USE_WANDB, MODEL_PATH, CREATE_DATA)

@@ -199,7 +199,7 @@ class GAN(nn.Module):
 
                     if self.modelType == 'GAN':
                         lossGen = self.lossFct(yFakeNew, labelsReal).clone()
-                        lossGen.backward(retain_graph = True if idx < self.genLoopCount - 1 else False)
+                        lossGen.backward()
 
                     elif self.modelType == 'WGAN':
                         lossGen = -yFakeNew.mean()
