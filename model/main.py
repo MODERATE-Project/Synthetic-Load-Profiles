@@ -9,7 +9,7 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import create_plots
+from model.plot import create_plots, create_html
 
 
 DAY_COUNT = 368
@@ -254,6 +254,8 @@ class GAN(nn.Module):
                     epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                     os.makedirs(epochPlotPath)
                     create_plots(self.inputDataset, sampleTemp, epochPlotPath)
+                    if epoch + 1 == self.epochCount:
+                        create_html(self.plotPath)
                 
                 # Save samples
                 if self.saveSamples or epoch + 1 == self.epochCount:

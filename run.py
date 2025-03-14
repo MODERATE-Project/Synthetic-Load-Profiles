@@ -24,7 +24,7 @@ OUTPUT_FORMAT = '.npy'
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 200
+EPOCH_COUNT = 5
 
 # Change the result save frequency; save all samples/models in addition to visualizations
 SAVE_FREQ = 50

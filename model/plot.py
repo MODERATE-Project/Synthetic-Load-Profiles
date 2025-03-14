@@ -2,6 +2,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+from pathlib import Path
+import json
 
 
 def plot_distrib(df_real, df_synth):
@@ -153,3 +155,137 @@ def create_plots(df_real, arr_synth, outputPath):
     for key, value in fig_dict.items():
         value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight')
     return fig_dict
+
+########################################################################################################################
+
+def create_html(path):
+  path =  path
+
+  # Get image paths
+  imageSets = {}
+  plotTypes = ['daily_trend', 'distrib_all_profiles', 'hourly_trend', 'mean_profiles', 'monthly_trend', 'stats_all_profiles', 'weekly_trend']
+  for item in plotTypes:
+      imageSets[item] = [Path(*imgPath.parts[-2:]) .as_posix() for imgPath in path.rglob('*') if item in str(imgPath) and imgPath.is_file()]
+  imageSets_json = json.dumps(imageSets)
+
+  # Create the HTML content
+  HTML = f"""
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <title>Training progression</title>
+    <style>
+      body {{ font-family: Arial, sans-serif; }}
+      #controls {{ text-align: center; margin-top: 20px; }}
+      #image-container {{ text-align: center; margin-top: 20px; }}
+      input[type="number"] {{ width: 60px; }}
+      #slider {{ width: 80%; margin-top: 10px; }}
+    </style>
+  </head>
+  <body>
+  <div id="controls">
+    <label for="imageSet">Select image type:</label>
+    <select id="imageSet">
+      {"".join(f'<option value="{k}">{k}</option>' for k in imageSets.keys())}
+    </select>
+    <br>
+    <label for="frequency">Frequency [FPS]:</label>
+    <input type="number" id="frequency" value="1" min="0.1" step="0.1">
+    <button id="playPause">Play</button>
+    <br>
+    <input type="range" id="slider" min="0" max="0" value="0">
+  </div>
+  <div id="image-container">
+    <img id="plot" src="" alt="Plot" style="max-width:100%; height:auto;">
+    <h2 id="epoch-title"></h2>
+  </div>
+  <script>
+    // Injected imageSets from Python
+    var imageSets = {imageSets_json};
+    
+    // Set the default image set to the first one in the dictionary.
+    var defaultSet = Object.keys(imageSets)[0];
+    var images = imageSets[defaultSet];
+    var currentIndex = 0;
+    var interval = null;
+    var playing = false;
+    var plot = document.getElementById('plot');
+    var slider = document.getElementById('slider');
+    var playPauseButton = document.getElementById('playPause');
+    var frequencyInput = document.getElementById('frequency');
+    var imageSetDropdown = document.getElementById('imageSet');
+    var epochTitle = document.getElementById('epoch-title');
+    
+    // Set slider's max based on the selected image set.
+    slider.max = images.length - 1;
+    
+    function updateImage(index) {{
+      if (index < 0 || index >= images.length) return;
+      currentIndex = index;
+      // The image source is constructed relative to the HTML file location.
+      plot.src = images[currentIndex];
+      slider.value = currentIndex;
+      
+      // Extract the epoch from the image path using a regex.
+      var epochMatch = images[currentIndex].match(/epoch_(\\d+)/);
+      if (epochMatch) {{
+        epochTitle.textContent = "Epoch: " + epochMatch[1];
+      }} else {{
+        epochTitle.textContent = "";
+      }}
+    }}
+    
+    function playAnimation() {{
+      var fps = parseFloat(frequencyInput.value);
+      if (isNaN(fps) || fps <= 0) {{
+        alert("Please enter a valid frequency (fps) greater than 0.");
+        return;
+      }}
+      var intervalTime = 1000 / fps;
+      interval = setInterval(function() {{
+        currentIndex = (currentIndex + 1) % images.length;
+        updateImage(currentIndex);
+      }}, intervalTime);
+      playing = true;
+      playPauseButton.textContent = "Pause";
+    }}
+    
+    function pauseAnimation() {{
+      clearInterval(interval);
+      playing = false;
+      playPauseButton.textContent = "Play";
+    }}
+    
+    playPauseButton.addEventListener('click', function() {{
+      if (!playing) {{
+        playAnimation();
+      }} else {{
+        pauseAnimation();
+      }}
+    }});
+    
+    slider.addEventListener('input', function() {{
+      pauseAnimation();
+      updateImage(parseInt(this.value));
+    }});
+    
+    imageSetDropdown.addEventListener('change', function() {{
+      pauseAnimation();
+      var selectedSet = this.value;
+      images = imageSets[selectedSet];
+      currentIndex = 0;
+      slider.max = images.length - 1;
+      updateImage(0);
+    }});
+    
+    // Display the first image on load.
+    updateImage(0);
+  </script>
+  </body>
+  </html>
+  """
+
+  # Export HTML file
+  with open(path / 'training_progression.html', 'w') as file:
+      file.write(HTML)
