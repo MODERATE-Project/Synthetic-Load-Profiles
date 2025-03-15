@@ -6,6 +6,17 @@ from pathlib import Path
 import json
 
 
+statTitle_dict = {
+    'mean': 'mean values',
+    'std': 'standard deviation values',
+    'median': 'median values',
+    'min': 'minimum values',
+    'max': 'maximum values',
+    'skew': 'skew values'
+}
+
+########################################################################################################################
+
 def plot_distrib(df_real, df_synth):
     fig = plt.figure(figsize = (7, 5))
     plt.hist(df_real.to_numpy().flatten(), bins = 100, alpha = 0.5, label = 'Real', color = 'aqua')
@@ -21,8 +32,8 @@ def plot_distrib(df_real, df_synth):
 
 ########################################################################################################################
 
-def plot_stat(stat, df_real, df_synth, ax, title, descrFontSize = 7):
-    box_dict = ax.boxplot([getattr(df_real, stat)(), getattr(df_synth, stat)()], vert = True)
+def plot_stat(statReal, statSynth, ax, title, descrFontSize = 7):
+    box_dict = ax.boxplot([statReal, statSynth], vert = True)
     ax.set_xticklabels(['real', 'synthetic'])
     ax.set_title(title, fontweight = 'bold')
     ax.set_ylabel('value')
@@ -40,40 +51,26 @@ def plot_stat(stat, df_real, df_synth, ax, title, descrFontSize = 7):
         ax.text(x_pos + 0.1, whiskers[1], f'Max: {whiskers[1]:.2f}', va = 'center', fontsize = descrFontSize, color = 'green')
 
 
-def plot_mean(df_real, df_synth, ax):
-    plot_stat('mean', df_real, df_synth, ax, 'mean values')
+def calc_stats(df, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
+  df_stats = df.agg(stats)
+  return df_stats
 
 
-def plot_std(df_real, df_synth, ax):
-    plot_stat('std', df_real, df_synth, ax, 'standard deviation values')
-
-
-def plot_median(df_real, df_synth, ax):
-    plot_stat('median', df_real, df_synth, ax, 'median values')
-
-
-def plot_min(df_real, df_synth, ax):
-    plot_stat('min', df_real, df_synth, ax, 'minimum values')
-
-
-def plot_max(df_real, df_synth, ax):
-    plot_stat('max', df_real, df_synth, ax, 'maximum values')
-
-
-def plot_skew(df_real, df_synth, ax):
-    plot_stat('skew', df_real, df_synth, ax, 'skew values')
-
-
-def plot_stats(df_real, df_synth):
+def plot_stats(statsReal, statsSynth):
     fig, axes = plt.subplots(nrows = 2, ncols = 3, figsize = (20, 10))
     axes = axes.flatten()
-    plotFuncs = [plot_mean, plot_std, plot_median, plot_min, plot_max, plot_skew]
-    for func, ax in zip(plotFuncs, axes):
-        func(df_real, df_synth, ax)
+    for stat, ax in zip(statsReal.index, axes):
+        plot_stat(statsReal.loc[stat], statsSynth.loc[stat], ax, statTitle_dict[stat])
     plt.suptitle('Comparison of...', ha = 'center', fontsize = 16, fontweight = 'bold')
     plt.tight_layout()
     plt.close()
     return fig
+
+
+def calc_RMSE(statReal, statSynth):
+    RMSE = np.sqrt(((statReal - statSynth.values)**2).mean())
+    return RMSE
+
 
 ########################################################################################################################
 
@@ -129,32 +126,38 @@ def plot_mean_trends(df_trend, res, stats = ['mean', 'std', 'median', 'min', 'ma
 
 ########################################################################################################################
 
-def create_plots(df_real, arr_synth, outputPath):
+def create_plots_and_calc_RMSE(df_real, arr_synth, outputPath = None, createPlots = True):
     fig_dict = {}
 
     df_real.index = pd.to_datetime(df_real.index)
+    df_real = df_real.astype(np.float32)
     df_synth = pd.DataFrame(arr_synth).set_index(0).astype(np.float32)
     df_synth.index = pd.to_datetime(df_synth.index)
 
-    # Value distributions
-    fig_dict['distrib_all_profiles'] = plot_distrib(df_real, df_synth)
+    df_statsReal, df_statsSynth = calc_stats(df_real), calc_stats(df_synth)
+    RMSE = np.sqrt(((df_statsReal.drop(index = 'median') - df_statsSynth.drop(index = 'median').values)**2).mean(axis = 1)).sum()
 
-    # Various statistics
-    fig_dict['stats_all_profiles'] = plot_stats(df_real, df_synth)
+    if createPlots:
+      # Value distributions
+      fig_dict['distrib_all_profiles'] = plot_distrib(df_real, df_synth)
 
-    # Mean profiles
-    fig_dict['mean_profiles'] = plot_mean_profiles(df_real, df_synth)
+      # Various statistics
+      fig_dict['stats_all_profiles'] = plot_stats(df_statsReal, df_statsSynth)
 
-    df_dict = {'Real': df_real, 'Synthetic': df_synth}
-    for res in ['hour', 'day', 'week', 'month']:
-        df_trend = create_df_trend(df_dict, res)
+      # Mean profiles
+      fig_dict['mean_profiles'] = plot_mean_profiles(df_real, df_synth)
 
-        # Mean trends
-        fig_dict[f'{res}ly_trend'.replace('day', 'dai')] = plot_mean_trends(df_trend, res)
+      df_dict = {'Real': df_real, 'Synthetic': df_synth}
+      for res in ['hour', 'day', 'week', 'month']:
+          df_trend = create_df_trend(df_dict, res)
 
-    for key, value in fig_dict.items():
+          # Mean trends
+          fig_dict[f'{res}ly_trend'.replace('day', 'dai')] = plot_mean_trends(df_trend, res)
+
+      for key, value in fig_dict.items():
         value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight')
-    return fig_dict
+    
+    return RMSE
 
 ########################################################################################################################
 
