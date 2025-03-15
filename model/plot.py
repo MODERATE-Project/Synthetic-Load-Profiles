@@ -51,7 +51,7 @@ def plot_stat(statReal, statSynth, ax, title, descrFontSize = 7):
         ax.text(x_pos + 0.1, whiskers[1], f'Max: {whiskers[1]:.2f}', va = 'center', fontsize = descrFontSize, color = 'green')
 
 
-def calc_stats(df: pd.DataFrame, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
+def calc_stats_for_plot(df: pd.DataFrame, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
     """Calculate statistics for a dataframe, optimized for performance."""
     # Convert to numpy array once (avoid multiple conversions)
     data = df.to_numpy()
@@ -105,12 +105,12 @@ def calc_RMSE(statReal: np.array, statSynth: np.array):
     RMSE = np.sqrt(((statReal - statSynth)**2).mean())
     return RMSE
 
-def fast_profile_metric(real_data: pd.DataFrame, synth_data: pd.DataFrame):
-    # Extract profile-level features (much faster than column-wise)
+def calc_profiles_feature_distance(real_data: pd.DataFrame, synth_data: pd.DataFrame):
+    # Extract profile-level features 
     real_features = extract_profile_features(real_data)
     synth_features = extract_profile_features(synth_data)
     
-    # Calculate simple distance (e.g., L2 norm)
+    # Calculate simple distance, mean R squared
     return np.mean((real_features - synth_features)**2)
 
 def extract_profile_features(data: pd.DataFrame):
@@ -146,25 +146,8 @@ def histogram_similarity(real_data, synth_data, bins=50):
     # Compare histograms using RMSE
     return np.sqrt(np.mean((real_hist - synth_hist)**2))
 
-def spectral_similarity(real_data: np.array, synth_data: np.array, n_samples=100):
-    # Sample profiles for efficiency
-    real_samples = real_data[np.random.choice(len(real_data), min(n_samples, len(real_data)))]
-    synth_samples = synth_data[np.random.choice(len(synth_data), min(n_samples, len(synth_data)))]
-    
-    # Get FFT of each profile
-    real_fft = np.abs(np.fft.fft(real_samples, axis=1))
-    synth_fft = np.abs(np.fft.fft(synth_samples, axis=1))
-    
-    # Compare average frequency components (no column alignment needed)
-    real_fft_avg = real_fft.mean(axis=0)
-    synth_fft_avg = synth_fft.mean(axis=0)
-    
-    # Use first half of spectrum (more meaningful frequencies)
-    half_len = real_fft_avg.shape[0] // 2
-    
-    return np.mean((real_fft_avg[:half_len] - synth_fft_avg[:half_len])**2)
 
-def fast_composite_metric(real_data: pd.DataFrame, array_synth: np.array):
+def composite_metric(real_data: pd.DataFrame, array_synth: np.array):
     real_data.index = pd.to_datetime(real_data.index)
     real_data = real_data.astype(np.float32)
     df_synth = pd.DataFrame(array_synth).set_index(0).astype(np.float32)
@@ -176,20 +159,20 @@ def fast_composite_metric(real_data: pd.DataFrame, array_synth: np.array):
     # Calculate all metrics
     stats_rmse = calc_RMSE(r, s)
     hist_similarity = histogram_similarity(r, s)
-    profile_features_distance = fast_profile_metric(real_data, df_synth)
+    profile_features_distance = calc_profiles_feature_distance(real_data, df_synth)
     
     # Normalize using reference values from initial run
     reference_values = {
-        'stats_rmse': getattr(fast_composite_metric, 'ref_stats_rmse', stats_rmse),
-        'hist_similarity': getattr(fast_composite_metric, 'ref_hist_similarity', hist_similarity),
-        'profile_features_distance': getattr(fast_composite_metric, 'ref_profile_features', profile_features_distance)
+        'stats_rmse': getattr(composite_metric, 'ref_stats_rmse', stats_rmse),
+        'hist_similarity': getattr(composite_metric, 'ref_hist_similarity', hist_similarity),
+        'profile_features_distance': getattr(composite_metric, 'ref_profile_features', profile_features_distance)
     }
     
     # Store reference values if this is the first run
-    if not hasattr(fast_composite_metric, 'ref_stats_rmse'):
-        fast_composite_metric.ref_stats_rmse = stats_rmse
-        fast_composite_metric.ref_hist_similarity = hist_similarity
-        fast_composite_metric.ref_profile_features = profile_features_distance
+    if not hasattr(composite_metric, 'ref_stats_rmse'):
+        composite_metric.ref_stats_rmse = stats_rmse
+        composite_metric.ref_hist_similarity = hist_similarity
+        composite_metric.ref_profile_features = profile_features_distance
     
     # Normalize each metric by its reference value
     normalized_stats_rmse = stats_rmse / reference_values['stats_rmse']
@@ -262,7 +245,7 @@ def create_plots(df_real, arr_synth, outputPath = None, createPlots = True):
     df_synth = pd.DataFrame(arr_synth).set_index(0).astype(np.float32)
     df_synth.index = pd.to_datetime(df_synth.index)
 
-    df_statsReal, df_statsSynth = calc_stats(df_real), calc_stats(df_synth)
+    df_statsReal, df_statsSynth = calc_stats_for_plot(df_real), calc_stats_for_plot(df_synth)
 
     if createPlots:
       # Value distributions
