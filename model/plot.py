@@ -51,7 +51,7 @@ def plot_stat(statReal, statSynth, ax, title, descrFontSize = 7):
         ax.text(x_pos + 0.1, whiskers[1], f'Max: {whiskers[1]:.2f}', va = 'center', fontsize = descrFontSize, color = 'green')
 
 
-def calc_stats(df, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
+def calc_stats(df: pd.DataFrame, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
     """Calculate statistics for a dataframe, optimized for performance."""
     # Convert to numpy array once (avoid multiple conversions)
     data = df.to_numpy()
@@ -90,7 +90,7 @@ def calc_stats(df, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
     return df_stats.T  
 
 
-def plot_stats(statsReal, statsSynth):
+def plot_stats(statsReal: pd.DataFrame, statsSynth: pd.DataFrame):
     fig, axes = plt.subplots(nrows = 2, ncols = 3, figsize = (20, 10))
     axes = axes.flatten()
     for stat, ax in zip(statsReal.index, axes):
@@ -117,15 +117,15 @@ def extract_profile_features(data: pd.DataFrame):
     # Calculate profile-level statistics (fast operations)
     data_np = data.to_numpy()
     features = np.array([
-        np.mean(data_np, axis=1),           # Average value per profile
-        np.std(data_np, axis=1),            # Volatility per profile
-        data.skew(axis=1).to_numpy(),
-        np.max(data_np, axis=1),        # Peak values
-        np.min(data_np, axis=1),        # Minimum values
-        np.median(data_np, axis=1),     # Median values
-        np.ptp(data_np, axis=1),        # Peak-to-peak range
-        np.percentile(data_np, 25, axis=1),  # Lower quartile
-        np.percentile(data_np, 75, axis=1),  # Upper quartile
+        np.mean(data_np, axis=0),           # Average value per profile
+        np.std(data_np, axis=0),            # Volatility per profile
+        data.skew(axis=0).to_numpy(),
+        np.max(data_np, axis=0),        # Peak values
+        np.min(data_np, axis=0),        # Minimum values
+        np.median(data_np, axis=0),     # Median values
+        np.ptp(data_np, axis=0),        # Peak-to-peak range
+        np.percentile(data_np, 25, axis=0),  # Lower quartile
+        np.percentile(data_np, 75, axis=0),  # Upper quartile
     ])
     
     # Return mean and std of each feature across all profiles
@@ -164,7 +164,7 @@ def spectral_similarity(real_data: np.array, synth_data: np.array, n_samples=100
     
     return np.mean((real_fft_avg[:half_len] - synth_fft_avg[:half_len])**2)
 
-def fast_composite_metric(real_data, array_synth):
+def fast_composite_metric(real_data: pd.DataFrame, array_synth: np.array):
     real_data.index = pd.to_datetime(real_data.index)
     real_data = real_data.astype(np.float32)
     df_synth = pd.DataFrame(array_synth).set_index(0).astype(np.float32)
