@@ -271,7 +271,9 @@ class GAN(nn.Module):
                         epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                         os.makedirs(epochPlotPath)
                         create_plots(self.inputDataset, sampleTemp, epochPlotPath)
-
+                        epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochSamplePath)
+                        export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
 
                 # Save samples
                 if (self.saveSamples and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
