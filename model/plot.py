@@ -52,8 +52,42 @@ def plot_stat(statReal, statSynth, ax, title, descrFontSize = 7):
 
 
 def calc_stats(df, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
-  df_stats = df.agg(stats)
-  return df_stats
+    """Calculate statistics for a dataframe, optimized for performance."""
+    # Convert to numpy array once (avoid multiple conversions)
+    data = df.to_numpy()
+    
+    # Pre-allocate results dictionary
+    results = {}
+    
+    # NumPy to be faster
+    if 'mean' in stats:
+        results['mean'] = np.mean(data, axis=0)
+    if 'std' in stats:
+        results['std'] = np.std(data, axis=0)
+    if 'min' in stats:
+        results['min'] = np.min(data, axis=0)
+    if 'max' in stats:
+        results['max'] = np.max(data, axis=0)
+    if 'median' in stats:
+        results['median'] = np.median(data, axis=0)
+    if 'skew' in stats:
+        # Use faster, vectorized calculation for skew
+        if data.size > 0:  # Avoid division by zero
+            m3 = np.mean((data - np.mean(data, axis=0, keepdims=True))**3, axis=0)
+            m2 = np.mean((data - np.mean(data, axis=0, keepdims=True))**2, axis=0)
+            # Avoid division by zero
+            mask = (m2 == 0)
+            skew_values = np.zeros_like(m2)
+            valid_indices = ~mask
+            if np.any(valid_indices):
+                skew_values[valid_indices] = m3[valid_indices] / m2[valid_indices]**(1.5)
+            results['skew'] = skew_values
+        else:
+            results['skew'] = np.zeros(data.shape[1])
+    
+    # Convert back to pandas for consistency with original function
+    df_stats = pd.DataFrame(results, index=df.columns)
+    return df_stats.T  
 
 
 def plot_stats(statsReal, statsSynth):
@@ -144,9 +178,7 @@ def fast_composite_metric(real_data, array_synth):
     hist_similarity = histogram_similarity(r, s)
     profile_features_distance = fast_profile_metric(real_data, df_synth)
     
-    # Option 1: Normalize using reference values from initial run
-    # These values should be determined from your data
-    # You can set these based on the first epoch's metrics and store them
+    # Normalize using reference values from initial run
     reference_values = {
         'stats_rmse': getattr(fast_composite_metric, 'ref_stats_rmse', stats_rmse),
         'hist_similarity': getattr(fast_composite_metric, 'ref_hist_similarity', hist_similarity),
@@ -165,7 +197,7 @@ def fast_composite_metric(real_data, array_synth):
     normalized_profile_features = profile_features_distance / reference_values['profile_features_distance']
     
 
-    # Combine with appropriate weights (now they're on similar scales)
+    # Combine with appropriate weights
     return 0.2*normalized_stats_rmse + 0.4*normalized_hist_similarity + 0.4*normalized_profile_features
 
 ########################################################################################################################
