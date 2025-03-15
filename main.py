@@ -1,6 +1,8 @@
 import wandb
 from datetime import datetime
 from pathlib import Path
+import torch
+import gc
 
 from model.main import GAN, generate_data_from_saved_model, export_synthetic_data
 
@@ -33,3 +35,10 @@ def run(params, modelType, projectName, inputFile, logRMSE, useWandb, modelPath,
         )
         model.train()
         wandb.finish()
+        # Explicitly clean up GPU memory after each run
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            # Force a synchronization point
+            torch.cuda.synchronize()
+        # Explicitly trigger garbage collection
+        gc.collect()

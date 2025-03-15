@@ -106,21 +106,28 @@ def plot_stats(statsReal: pd.DataFrame, statsSynth: pd.DataFrame):
     return fig
 
 
-def calc_feature_distance(real_data: pd.DataFrame, synth_data: pd.DataFrame) -> (float, float):
-    # Extract profile-level features 
-    real_profile_features, real_time_features = extract_profile_features(real_data)
-    synth_profile_features, synth_time_features = extract_profile_features(synth_data)
+def extract_time_features(data: pd.DataFrame) -> np.array:
+    """
+    Time-level statistics (across profiles for each time point)
+    """
+    data_np = data.to_numpy()
+    time_features = np.array([
+    np.mean(data_np, axis=1),           # Average value per timestep
+    np.std(data_np, axis=1),            # Volatility per timestep
+    calc_skew(data_np, axis=1),
+    np.max(data_np, axis=1),        # Peak values
+    np.min(data_np, axis=1),        # Minimum values
+    np.median(data_np, axis=1),     # Median values
+    np.ptp(data_np, axis=1),        # Peak-to-peak range
+    np.percentile(data_np, 25, axis=1),  # Lower quartile
+    np.percentile(data_np, 75, axis=1),  # Upper quartile
+    ])
+    return time_features
     
-    # Calculate simple distance, mean R squared
-    return np.mean((real_profile_features - synth_profile_features)**2), np.mean((real_time_features - synth_time_features)**2)
 
 def extract_profile_features(data: pd.DataFrame) -> np.array:
     """
-    Extract statistical features from profiles, including both:
-    1. Profile-level statistics (across time for each profile)
-    2. Time-level statistics (across profiles for each time point)
-    
-    This provides a comprehensive statistical fingerprint of the data.
+    Profile-level statistics (across time for each profile)
     """
     # Convert once to numpy for efficiency
     data_np = data.to_numpy()
@@ -135,21 +142,7 @@ def extract_profile_features(data: pd.DataFrame) -> np.array:
         np.percentile(data_np, 25, axis=0),  # Lower quartile
         np.percentile(data_np, 75, axis=0),  # Upper quartile
     ])
-
-    time_features = np.array([
-        np.mean(data_np, axis=1),           # Average value per timestep
-        np.std(data_np, axis=1),            # Volatility per timestep
-        calc_skew(data_np, axis=1),
-        np.max(data_np, axis=1),        # Peak values
-        np.min(data_np, axis=1),        # Minimum values
-        np.median(data_np, axis=1),     # Median values
-        np.ptp(data_np, axis=1),        # Peak-to-peak range
-        np.percentile(data_np, 25, axis=1),  # Lower quartile
-        np.percentile(data_np, 75, axis=1),  # Upper quartile
-    ])
-    
-    # Return mean and std of each feature across all profiles
-    return profile_features, time_features
+    return profile_features
 
 def histogram_similarity(real_data, synth_data, bins=50):
     # Flatten all data points
@@ -178,7 +171,8 @@ def composite_metric(real_data: pd.DataFrame, array_synth: np.array):
     
     # Calculate all metrics
     hist_similarity = histogram_similarity(r, s)
-    profile_features_distance, time_features_distance = calc_feature_distance(real_data, df_synth)
+    profile_features_distance = np.mean((extract_profile_features(real_data) - extract_profile_features(df_synth))**2)
+    time_features_distance = np.mean((extract_time_features(real_data) - extract_time_features(df_synth))**2)
     
     # Normalize using reference values from initial run
     reference_values = {
