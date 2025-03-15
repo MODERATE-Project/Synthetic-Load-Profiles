@@ -9,7 +9,7 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import create_plots_and_calc_RMSE, create_html
+from model.plot import create_plots, create_html, fast_composite_metric
 
 
 DAY_COUNT = 368
@@ -116,6 +116,8 @@ class GAN(nn.Module):
 
     def train(self):
         logs = []
+        stats_values = []  # Track all RMSE values
+        min_stat = float(1) # Initialize with 1 as this is the start value in the first epoch (stats are normalize based on first epoch)
 
         # Create progress bar
         if not self.useMarimo:
@@ -241,7 +243,8 @@ class GAN(nn.Module):
             # Generate sample for (interim) result export
             if self.logRMSE or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
                 sampleTemp = self.generate_data()
-                
+                stats = fast_composite_metric(real_data=self.inputDataset, array_synth=sampleTemp)
+                stats_values.append(stats)
                 # Save models
                 if (self.saveModels and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
@@ -252,12 +255,24 @@ class GAN(nn.Module):
                 if (self.savePlots and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                     os.makedirs(epochPlotPath)
-                    RMSE = create_plots_and_calc_RMSE(self.inputDataset, sampleTemp, epochPlotPath)
+                    create_plots(self.inputDataset, sampleTemp, epochPlotPath)
+                    
+                    if epoch == self.params["checkForMinStats"]:
+                        min_stat = min(stats_values)
+                    if epoch > self.params["checkForMinStats"] and stats < min_stat:
+                        min_stat = stats
                     if epoch + 1 == self.epochCount:
                         create_html(self.plotPath)
                 elif self.logRMSE:
-                    RMSE = create_plots_and_calc_RMSE(self.inputDataset, sampleTemp, createPlots = False)
-                
+                    if epoch == self.params["checkForMinStats"]:
+                        min_stat = min(stats_values)
+                    if epoch > self.params["checkForMinStats"] and stats < min_stat:
+                        min_stat = stats
+                        epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochPlotPath)
+                        create_plots(self.inputDataset, sampleTemp, epochPlotPath)
+
+
                 # Save samples
                 if (self.saveSamples and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
@@ -265,7 +280,7 @@ class GAN(nn.Module):
                     export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
 
             # Log progress offline
-            logs_dict = {'epoch': epoch} | log_dict if not self.logRMSE else {'epoch': epoch} | log_dict | {'RMSE': RMSE}
+            logs_dict = {'epoch': epoch} | log_dict if not self.logRMSE else {'epoch': epoch} | log_dict | {'stats': stats}
             logs.append(logs_dict)
 
         # Save logged parameters

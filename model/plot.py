@@ -67,10 +67,106 @@ def plot_stats(statsReal, statsSynth):
     return fig
 
 
-def calc_RMSE(statReal, statSynth):
-    RMSE = np.sqrt(((statReal - statSynth.values)**2).mean())
+def calc_RMSE(statReal: np.array, statSynth: np.array):
+    RMSE = np.sqrt(((statReal - statSynth)**2).mean())
     return RMSE
 
+def fast_profile_metric(real_data: pd.DataFrame, synth_data: pd.DataFrame):
+    # Extract profile-level features (much faster than column-wise)
+    real_features = extract_profile_features(real_data)
+    synth_features = extract_profile_features(synth_data)
+    
+    # Calculate simple distance (e.g., L2 norm)
+    return np.mean((real_features - synth_features)**2)
+
+def extract_profile_features(data: pd.DataFrame):
+    # Calculate profile-level statistics (fast operations)
+    data_np = data.to_numpy()
+    features = np.array([
+        np.mean(data_np, axis=1),           # Average value per profile
+        np.std(data_np, axis=1),            # Volatility per profile
+        data.skew(axis=1).to_numpy(),
+        np.max(data_np, axis=1),        # Peak values
+        np.min(data_np, axis=1),        # Minimum values
+        np.median(data_np, axis=1),     # Median values
+        np.ptp(data_np, axis=1),        # Peak-to-peak range
+        np.percentile(data_np, 25, axis=1),  # Lower quartile
+        np.percentile(data_np, 75, axis=1),  # Upper quartile
+    ])
+    
+    # Return mean and std of each feature across all profiles
+    return np.concatenate([features.mean(axis=1), features.std(axis=1)])
+
+def histogram_similarity(real_data, synth_data, bins=50):
+    # Flatten all data points
+    real_flat = real_data.flatten()
+    synth_flat = synth_data.flatten()
+    
+    # Create histograms with consistent range
+    data_min = min(real_flat.min(), synth_flat.min())
+    data_max = max(real_flat.max(), synth_flat.max())
+    
+    real_hist, _ = np.histogram(real_flat, bins=bins, range=(data_min, data_max), density=True)
+    synth_hist, _ = np.histogram(synth_flat, bins=bins, range=(data_min, data_max), density=True)
+    
+    # Compare histograms using RMSE
+    return np.sqrt(np.mean((real_hist - synth_hist)**2))
+
+def spectral_similarity(real_data: np.array, synth_data: np.array, n_samples=100):
+    # Sample profiles for efficiency
+    real_samples = real_data[np.random.choice(len(real_data), min(n_samples, len(real_data)))]
+    synth_samples = synth_data[np.random.choice(len(synth_data), min(n_samples, len(synth_data)))]
+    
+    # Get FFT of each profile
+    real_fft = np.abs(np.fft.fft(real_samples, axis=1))
+    synth_fft = np.abs(np.fft.fft(synth_samples, axis=1))
+    
+    # Compare average frequency components (no column alignment needed)
+    real_fft_avg = real_fft.mean(axis=0)
+    synth_fft_avg = synth_fft.mean(axis=0)
+    
+    # Use first half of spectrum (more meaningful frequencies)
+    half_len = real_fft_avg.shape[0] // 2
+    
+    return np.mean((real_fft_avg[:half_len] - synth_fft_avg[:half_len])**2)
+
+def fast_composite_metric(real_data, array_synth):
+    real_data.index = pd.to_datetime(real_data.index)
+    real_data = real_data.astype(np.float32)
+    df_synth = pd.DataFrame(array_synth).set_index(0).astype(np.float32)
+    df_synth.index = pd.to_datetime(df_synth.index)
+
+    r = real_data.to_numpy()
+    s = df_synth.to_numpy()
+    
+    # Calculate all metrics
+    stats_rmse = calc_RMSE(r, s)
+    hist_similarity = histogram_similarity(r, s)
+    profile_features_distance = fast_profile_metric(real_data, df_synth)
+    
+    # Option 1: Normalize using reference values from initial run
+    # These values should be determined from your data
+    # You can set these based on the first epoch's metrics and store them
+    reference_values = {
+        'stats_rmse': getattr(fast_composite_metric, 'ref_stats_rmse', stats_rmse),
+        'hist_similarity': getattr(fast_composite_metric, 'ref_hist_similarity', hist_similarity),
+        'profile_features_distance': getattr(fast_composite_metric, 'ref_profile_features', profile_features_distance)
+    }
+    
+    # Store reference values if this is the first run
+    if not hasattr(fast_composite_metric, 'ref_stats_rmse'):
+        fast_composite_metric.ref_stats_rmse = stats_rmse
+        fast_composite_metric.ref_hist_similarity = hist_similarity
+        fast_composite_metric.ref_profile_features = profile_features_distance
+    
+    # Normalize each metric by its reference value
+    normalized_stats_rmse = stats_rmse / reference_values['stats_rmse']
+    normalized_hist_similarity = hist_similarity / reference_values['hist_similarity']
+    normalized_profile_features = profile_features_distance / reference_values['profile_features_distance']
+    
+
+    # Combine with appropriate weights (now they're on similar scales)
+    return 0.2*normalized_stats_rmse + 0.4*normalized_hist_similarity + 0.4*normalized_profile_features
 
 ########################################################################################################################
 
@@ -126,7 +222,7 @@ def plot_mean_trends(df_trend, res, stats = ['mean', 'std', 'median', 'min', 'ma
 
 ########################################################################################################################
 
-def create_plots_and_calc_RMSE(df_real, arr_synth, outputPath = None, createPlots = True):
+def create_plots(df_real, arr_synth, outputPath = None, createPlots = True):
     fig_dict = {}
 
     df_real.index = pd.to_datetime(df_real.index)
@@ -135,7 +231,6 @@ def create_plots_and_calc_RMSE(df_real, arr_synth, outputPath = None, createPlot
     df_synth.index = pd.to_datetime(df_synth.index)
 
     df_statsReal, df_statsSynth = calc_stats(df_real), calc_stats(df_synth)
-    RMSE = np.sqrt(((df_statsReal.drop(index = 'median') - df_statsSynth.drop(index = 'median').values)**2).mean(axis = 1)).sum()
 
     if createPlots:
       # Value distributions
@@ -157,7 +252,6 @@ def create_plots_and_calc_RMSE(df_real, arr_synth, outputPath = None, createPlot
       for key, value in fig_dict.items():
         value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight')
     
-    return RMSE
 
 ########################################################################################################################
 
@@ -298,3 +392,4 @@ def create_html(path):
   # Export HTML file
   with open(path / 'training_progression.html', 'w') as file:
       file.write(HTML)
+
