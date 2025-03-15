@@ -51,6 +51,23 @@ def plot_stat(statReal, statSynth, ax, title, descrFontSize = 7):
         ax.text(x_pos + 0.1, whiskers[1], f'Max: {whiskers[1]:.2f}', va = 'center', fontsize = descrFontSize, color = 'green')
 
 
+def calc_skew(data: np.array, axis=0) -> np.array:
+    # Use faster, vectorized calculation for skew
+    if data.size > 0:  # Avoid division by zero
+        m3 = np.mean((data - np.mean(data, axis=axis, keepdims=True))**3, axis=axis)
+        m2 = np.mean((data - np.mean(data, axis=axis, keepdims=True))**2, axis=axis)
+        # Avoid division by zero
+        mask = (m2 == 0)
+        skew_values = np.zeros_like(m2)
+        valid_indices = ~mask
+        if np.any(valid_indices):
+            skew_values[valid_indices] = m3[valid_indices] / m2[valid_indices]**(1.5)
+    
+        return skew_values
+    else:
+        return np.zeros(data.shape[1])
+
+    
 def calc_stats_for_plot(df: pd.DataFrame, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
     """Calculate statistics for a dataframe, optimized for performance."""
     # Convert to numpy array once (avoid multiple conversions)
@@ -71,19 +88,7 @@ def calc_stats_for_plot(df: pd.DataFrame, stats = ['mean', 'std', 'median', 'min
     if 'median' in stats:
         results['median'] = np.median(data, axis=0)
     if 'skew' in stats:
-        # Use faster, vectorized calculation for skew
-        if data.size > 0:  # Avoid division by zero
-            m3 = np.mean((data - np.mean(data, axis=0, keepdims=True))**3, axis=0)
-            m2 = np.mean((data - np.mean(data, axis=0, keepdims=True))**2, axis=0)
-            # Avoid division by zero
-            mask = (m2 == 0)
-            skew_values = np.zeros_like(m2)
-            valid_indices = ~mask
-            if np.any(valid_indices):
-                skew_values[valid_indices] = m3[valid_indices] / m2[valid_indices]**(1.5)
-            results['skew'] = skew_values
-        else:
-            results['skew'] = np.zeros(data.shape[1])
+        results['skew'] = calc_skew(data, axis=0)
     
     # Convert back to pandas for consistency with original function
     df_stats = pd.DataFrame(results, index=df.columns)
@@ -101,25 +106,28 @@ def plot_stats(statsReal: pd.DataFrame, statsSynth: pd.DataFrame):
     return fig
 
 
-def calc_RMSE(statReal: np.array, statSynth: np.array):
-    RMSE = np.sqrt(((statReal - statSynth)**2).mean())
-    return RMSE
-
-def calc_profiles_feature_distance(real_data: pd.DataFrame, synth_data: pd.DataFrame):
+def calc_feature_distance(real_data: pd.DataFrame, synth_data: pd.DataFrame) -> (float, float):
     # Extract profile-level features 
-    real_features = extract_profile_features(real_data)
-    synth_features = extract_profile_features(synth_data)
+    real_profile_features, real_time_features = extract_profile_features(real_data)
+    synth_profile_features, synth_time_features = extract_profile_features(synth_data)
     
     # Calculate simple distance, mean R squared
-    return np.mean((real_features - synth_features)**2)
+    return np.mean((real_profile_features - synth_profile_features)**2), np.mean((real_time_features - synth_time_features)**2)
 
-def extract_profile_features(data: pd.DataFrame):
-    # Calculate profile-level statistics (fast operations)
+def extract_profile_features(data: pd.DataFrame) -> np.array:
+    """
+    Extract statistical features from profiles, including both:
+    1. Profile-level statistics (across time for each profile)
+    2. Time-level statistics (across profiles for each time point)
+    
+    This provides a comprehensive statistical fingerprint of the data.
+    """
+    # Convert once to numpy for efficiency
     data_np = data.to_numpy()
-    features = np.array([
+    profile_features = np.array([
         np.mean(data_np, axis=0),           # Average value per profile
         np.std(data_np, axis=0),            # Volatility per profile
-        data.skew(axis=0).to_numpy(),
+        calc_skew(data_np, axis=0),
         np.max(data_np, axis=0),        # Peak values
         np.min(data_np, axis=0),        # Minimum values
         np.median(data_np, axis=0),     # Median values
@@ -127,9 +135,21 @@ def extract_profile_features(data: pd.DataFrame):
         np.percentile(data_np, 25, axis=0),  # Lower quartile
         np.percentile(data_np, 75, axis=0),  # Upper quartile
     ])
+
+    time_features = np.array([
+        np.mean(data_np, axis=1),           # Average value per timestep
+        np.std(data_np, axis=1),            # Volatility per timestep
+        calc_skew(data_np, axis=1),
+        np.max(data_np, axis=1),        # Peak values
+        np.min(data_np, axis=1),        # Minimum values
+        np.median(data_np, axis=1),     # Median values
+        np.ptp(data_np, axis=1),        # Peak-to-peak range
+        np.percentile(data_np, 25, axis=1),  # Lower quartile
+        np.percentile(data_np, 75, axis=1),  # Upper quartile
+    ])
     
     # Return mean and std of each feature across all profiles
-    return np.concatenate([features.mean(axis=1), features.std(axis=1)])
+    return profile_features, time_features
 
 def histogram_similarity(real_data, synth_data, bins=50):
     # Flatten all data points
@@ -157,31 +177,31 @@ def composite_metric(real_data: pd.DataFrame, array_synth: np.array):
     s = df_synth.to_numpy()
     
     # Calculate all metrics
-    stats_rmse = calc_RMSE(r, s)
     hist_similarity = histogram_similarity(r, s)
-    profile_features_distance = calc_profiles_feature_distance(real_data, df_synth)
+    profile_features_distance, time_features_distance = calc_feature_distance(real_data, df_synth)
     
     # Normalize using reference values from initial run
     reference_values = {
-        'stats_rmse': getattr(composite_metric, 'ref_stats_rmse', stats_rmse),
         'hist_similarity': getattr(composite_metric, 'ref_hist_similarity', hist_similarity),
-        'profile_features_distance': getattr(composite_metric, 'ref_profile_features', profile_features_distance)
+        'profile_features_distance': getattr(composite_metric, 'ref_profile_features', profile_features_distance),
+        'time_features_distance': getattr(composite_metric, 'ref_time_features', time_features_distance)
+
     }
     
     # Store reference values if this is the first run
     if not hasattr(composite_metric, 'ref_stats_rmse'):
-        composite_metric.ref_stats_rmse = stats_rmse
         composite_metric.ref_hist_similarity = hist_similarity
         composite_metric.ref_profile_features = profile_features_distance
+        composite_metric.ref_time_features = time_features_distance
     
     # Normalize each metric by its reference value
-    normalized_stats_rmse = stats_rmse / reference_values['stats_rmse']
     normalized_hist_similarity = hist_similarity / reference_values['hist_similarity']
     normalized_profile_features = profile_features_distance / reference_values['profile_features_distance']
+    normalized_time_features = time_features_distance / reference_values['time_features_distance']
     
 
     # Combine with appropriate weights
-    return 0.2*normalized_stats_rmse + 0.4*normalized_hist_similarity + 0.4*normalized_profile_features
+    return  0.4*normalized_hist_similarity + 0.3*normalized_profile_features + 0.3*normalized_time_features
 
 ########################################################################################################################
 
