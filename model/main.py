@@ -9,7 +9,7 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import create_plots, create_html, fast_composite_metric
+from model.plot import create_plots, create_html, composite_metric
 
 
 DAY_COUNT = 368
@@ -243,7 +243,7 @@ class GAN(nn.Module):
             # Generate sample for (interim) result export
             if self.logRMSE or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
                 sampleTemp = self.generate_data()
-                stats = fast_composite_metric(real_data=self.inputDataset, array_synth=sampleTemp)
+                stats = composite_metric(real_data=self.inputDataset, array_synth=sampleTemp)
                 stats_values.append(stats)
                 # Save models
                 if (self.saveModels and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
