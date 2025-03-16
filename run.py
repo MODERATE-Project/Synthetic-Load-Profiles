@@ -21,7 +21,7 @@ INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
 OUTPUT_FORMAT = '.npy'
 
 # Log RMSE
-LOG_RMSE = True
+LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
 USE_WANDB = True
@@ -61,4 +61,4 @@ if __name__ == '__main__':
     inputFile = pd.read_csv(INPUT_PATH, sep = get_sep(INPUT_PATH))
     inputFile = inputFile.set_index(inputFile.columns[0])
     inputFile.index = pd.to_datetime(inputFile.index, format = 'mixed')
-    run(params, MODEL_TYPE, PROJECT_NAME, inputFile, LOG_RMSE, USE_WANDB, MODEL_PATH, CREATE_DATA)
+    run(params, MODEL_TYPE, PROJECT_NAME, inputFile, LOG_STATS, USE_WANDB, MODEL_PATH, CREATE_DATA)

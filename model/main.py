@@ -44,7 +44,7 @@ class GAN(nn.Module):
             outputPath,
             modelType: Literal['GAN', 'WGAN'],
             modelStatePath = None,
-            logRMSE = False,
+            logSTATS = False,
             wandb = None,
             useMarimo = False
         ):
@@ -60,7 +60,7 @@ class GAN(nn.Module):
         else:
             raise ValueError(f"'{self.modelType}' is not a supported model type ['GAN', 'WGAN'].")
         self.modelStatePath = modelStatePath
-        self.logRMSE = logRMSE
+        self.logSTATS = logSTATS
         self.wandb = wandb
         self.useMarimo = useMarimo
 
@@ -241,7 +241,7 @@ class GAN(nn.Module):
                 self.wandb.log(log_dict)
             
             # Generate sample for (interim) result export
-            if self.logRMSE or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
+            if self.logSTATS or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
                 sampleTemp = self.generate_data()
                 stats = composite_metric(real_data=self.inputDataset, array_synth=sampleTemp)
                 stats_values.append(stats)
@@ -263,7 +263,7 @@ class GAN(nn.Module):
                         min_stat = stats
                     if epoch + 1 == self.epochCount:
                         create_html(self.plotPath)
-                elif self.logRMSE:
+                elif self.logSTATS:
                     if epoch == self.params["checkForMinStats"]:
                         min_stat = min(stats_values)
                     if epoch > self.params["checkForMinStats"] and stats < min_stat:
@@ -282,7 +282,7 @@ class GAN(nn.Module):
                     export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
 
             # Log progress offline
-            logs_dict = {'epoch': epoch} | log_dict if not self.logRMSE else {'epoch': epoch} | log_dict | {'stats': stats}
+            logs_dict = {'epoch': epoch} | log_dict if not self.logSTATS else {'epoch': epoch} | log_dict | {'stats': stats}
             logs.append(logs_dict)
 
         # Save logged parameters
