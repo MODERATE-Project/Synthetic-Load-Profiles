@@ -321,10 +321,7 @@ def plot_stats_progress(epochs, stats_values, outputPath=None):
     # Highlight the minimum point
     ax.scatter(min_epoch, min_value, color='red', s=100, 
                label=f'Minimum: {min_value:.4f} at epoch {min_epoch}')
-    
-    # Add connecting lines for better visualization
-    ax.plot(epochs, stats_values, color='#1f77b4', alpha=0.3)
-        
+            
     # Set plot labels and title with larger font
     ax.set_xlabel('Epoch', fontweight='bold', fontsize=14)
     ax.set_ylabel('Stats Value', fontweight='bold', fontsize=14)
