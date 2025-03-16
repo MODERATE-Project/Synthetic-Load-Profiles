@@ -42,3 +42,4 @@ def run(params, modelType, projectName, inputFile, logRMSE, useWandb, modelPath,
             torch.cuda.synchronize()
         # Explicitly trigger garbage collection
         gc.collect()
+        del model
