@@ -203,7 +203,7 @@ def plot_mean_profiles(df_real, df_synth):
     arr_real = df_real.to_numpy()
     arr_synth = df_synth.to_numpy()
     maxCols = min([arr_real.shape[1], arr_synth.shape[1]])
-    v_min, v_max = min(arr_real), max(arr_real)
+    v_min, v_max = arr_real.min(), arr_real.max()
     fig, axs = plt.subplots(ncols = 3, nrows = 1, figsize = (15, 3))
     sns.heatmap(arr_real.mean(axis = 1).reshape(-1, 24).T, ax = axs[0], vmin=v_min, vmax=v_max)
     sns.heatmap(arr_synth.mean(axis = 1).reshape(-1, 24).T, ax = axs[1], vmin=v_min, vmax=v_max)
