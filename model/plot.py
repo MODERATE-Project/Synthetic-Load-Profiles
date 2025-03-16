@@ -285,6 +285,74 @@ def create_plots(df_real, arr_synth, outputPath = None, createPlots = True):
 
 ########################################################################################################################
 
+def plot_stats_progress(epochs, stats_values, outputPath=None):
+    """
+    Plot the progress of the combined statistics metric over epochs.
+    
+    Parameters:
+    -----------
+    epochs : list or array
+        List of epoch numbers
+    stats_values : list or array
+        List of stats values corresponding to each epoch
+    outputPath : Path object, optional
+        Path to save the plot
+        
+    Returns:
+    --------
+    fig : matplotlib figure
+        The generated figure
+    """
+    # Convert to numpy arrays for easier manipulation
+    epochs = np.array(epochs)
+    stats_values = np.array(stats_values)
+    
+    # Find the minimum value and its epoch
+    min_idx = np.argmin(stats_values)
+    min_epoch = epochs[min_idx]
+    min_value = stats_values[min_idx]
+    
+    # Create the plot
+    fig, ax = plt.figure(figsize=(10, 6)), plt.gca()
+    
+    # Plot all points
+    ax.scatter(epochs, stats_values, color='#1f77b4', alpha=0.7, label='Stats')
+    
+    # Highlight the minimum point
+    ax.scatter(min_epoch, min_value, color='red', s=100, 
+               label=f'Minimum: {min_value:.4f} at epoch {min_epoch}')
+    
+    # Add connecting lines for better visualization
+    ax.plot(epochs, stats_values, color='#1f77b4', alpha=0.3)
+        
+    # Set plot labels and title with larger font
+    ax.set_xlabel('Epoch', fontweight='bold', fontsize=14)
+    ax.set_ylabel('Stats Value', fontweight='bold', fontsize=14)
+    
+    # Increase tick size
+    ax.tick_params(axis='both', which='major', labelsize=12)
+    
+    # Set y-axis limits between 0 and 1
+    ax.set_ylim(0, 1)
+    
+    # Add grid for better readability
+    ax.grid(True, linestyle='--', alpha=0.7, axis="y")
+    
+    # Add legend with larger font
+    ax.legend(loc="lower left", fontsize=14)
+    
+    # Tight layout
+    plt.tight_layout()
+    
+    # Save if path is provided
+    if outputPath:
+        plt.savefig(outputPath / 'stats_progress.png', bbox_inches='tight', dpi=150)
+        
+    # Close the plot to prevent display in notebook environments
+    plt.close()
+    
+########################################################################################################################
+
 def create_html(path):
   path =  path
   import re
@@ -422,4 +490,6 @@ def create_html(path):
   # Export HTML file
   with open(path / 'training_progression.html', 'w') as file:
       file.write(HTML)
+
+
 

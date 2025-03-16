@@ -9,7 +9,7 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import create_plots, create_html, composite_metric
+from model.plot import create_plots, create_html, composite_metric, plot_stats_progress
 
 
 DAY_COUNT = 368
@@ -288,6 +288,14 @@ class GAN(nn.Module):
         # Save logged parameters
         df_log = pd.DataFrame(logs)
         df_log.to_csv(self.logPath / 'log.csv', index = False)
+        
+        # Plot stats progress at the end of training if we have collected stats
+        if len(stats_values) > 0:
+            # Extract epochs for which we have stats values
+            stat_epochs = [logs[i]['epoch'] + 1 for i in range(len(logs)) if 'stats' in logs[i]]
+            # Plot the stats progress
+            stats_fig = plot_stats_progress(stat_epochs, stats_values, self.plotPath)
+
 
     def compute_gradient_penalty(self, model, xReal, xFake, device):
         """Computes the gradient penalty for the WGAN method."""
