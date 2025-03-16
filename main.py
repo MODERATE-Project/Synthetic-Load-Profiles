@@ -35,6 +35,7 @@ def run(params, modelType, projectName, inputFile, logRMSE, useWandb, modelPath,
         )
         model.train()
         wandb.finish()
+        del model
         # Explicitly clean up GPU memory after each run
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
@@ -42,4 +43,4 @@ def run(params, modelType, projectName, inputFile, logRMSE, useWandb, modelPath,
             torch.cuda.synchronize()
         # Explicitly trigger garbage collection
         gc.collect()
-        del model
+        
