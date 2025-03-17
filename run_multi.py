@@ -11,29 +11,30 @@ MODEL_TYPE = 'WGAN'
 ####################################################################################################
 
 # Project name
-PROJECT_NAME = 'WGAN_Gen1_only_save_good_results'
+PROJECT_NAME = 'test'
 
 # Input file path
-INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
+INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
+#INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
 
 # Log RMSE
-LOG_RMSE = True
+LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 4000
+EPOCH_COUNT = 1000
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 4000
-CHECK_FOR_MIN_STATS = 100  # after these epochs runs with lower Stats than minimum up to this point are plotted
+SAVE_FREQ = 50
 SAVE_MODELS = False
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
+CHECK_FOR_MIN_STATS = 100   #after these epochs, runs with lower stats than the current minimum are plotted
 
 ####################################################################################################
 
@@ -68,4 +69,4 @@ if __name__ == '__main__':
     for cat in df_label['Category'].unique():
         IDs = [str(x) for x in df_label.loc[df_label['Category'] == cat, 'ID']]
         df = inputFile.loc[:, IDs]
-        run(params, MODEL_TYPE, f"{PROJECT_NAME}_{cat}", df, LOG_RMSE, USE_WANDB, MODEL_PATH, CREATE_DATA)
+        run(params, MODEL_TYPE, f"{PROJECT_NAME}_{cat}", df, LOG_STATS, USE_WANDB, MODEL_PATH, CREATE_DATA)

@@ -17,6 +17,7 @@ params = {
     'saveModels': False,
     'savePlots': True,
     'saveSamples': False,
+    'checkForMinStats': 100,
     'dimNoise': 128,
     'dimHidden': 16,
     'channelCount': 1,

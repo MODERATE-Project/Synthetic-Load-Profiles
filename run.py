@@ -11,11 +11,11 @@ MODEL_TYPE = 'WGAN'
 ####################################################################################################
 
 # Project name
-PROJECT_NAME = 'WGAN-1Genloop_fluvius_total_new_stats'
+PROJECT_NAME = 'test'
 
 # Input file path
-#INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
-INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
+INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
+#INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
@@ -27,14 +27,14 @@ LOG_STATS = True
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 2000
+EPOCH_COUNT = 1000
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 2000
-CHECK_FOR_MIN_STATS = 300  # after these epochs runs with lower Stats than minimum up to this point are plotted
+SAVE_FREQ = 50
 SAVE_MODELS = False
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
+CHECK_FOR_MIN_STATS = 100   #after these epochs, runs with lower stats than the current minimum are plotted
 
 ####################################################################################################
 

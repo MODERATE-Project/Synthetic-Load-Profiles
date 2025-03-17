@@ -9,7 +9,7 @@ import numpy as np
 import gzip
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import create_plots, create_html, composite_metric, plot_stats_progress
+from model.plot import calc_features, compute_trends, create_plots, create_html, composite_metric, plot_stats_progress
 
 
 DAY_COUNT = 368
@@ -44,7 +44,7 @@ class GAN(nn.Module):
             outputPath,
             modelType: Literal['GAN', 'WGAN'],
             modelStatePath = None,
-            logSTATS = False,
+            logStats = False,
             wandb = None,
             useMarimo = False
         ):
@@ -60,7 +60,7 @@ class GAN(nn.Module):
         else:
             raise ValueError(f"'{self.modelType}' is not a supported model type ['GAN', 'WGAN'].")
         self.modelStatePath = modelStatePath
-        self.logSTATS = logSTATS
+        self.logStats = logStats
         self.wandb = wandb
         self.useMarimo = useMarimo
 
@@ -113,11 +113,19 @@ class GAN(nn.Module):
             self.optimGen.load_state_dict(self.modelState['optim_gen_state_dict'])
             self.optimDis.load_state_dict(self.modelState['optim_dis_state_dict'])
 
+        # Prepare real data for plotting
+        self.arr_real = self.inputDataset.to_numpy().astype(np.float32)
+        self.arr_dt = pd.to_datetime(self.inputDataset.index)
+        del self.inputDataset
+        self.arr_featuresReal = calc_features(self.arr_real, axis = 0)
+        self.df_trendsReal = compute_trends(self.arr_real, self.arr_dt, type_ = 'real')
+        self.arr_timeFeaturesReal = calc_features(self.arr_real, axis = 1)
+
 
     def train(self):
         logs = []
-        stats_values = []  # Track all RMSE values
-        min_stat = float(1) # Initialize with 1 as this is the start value in the first epoch (stats are normalize based on first epoch)
+        stats_list = []  #track all RMSE values
+        minStat = float(1)  #initialize with 1 as this is the start value in the first epoch (stats are normalize based on first epoch)
 
         # Create progress bar
         if not self.useMarimo:
@@ -241,10 +249,11 @@ class GAN(nn.Module):
                 self.wandb.log(log_dict)
             
             # Generate sample for (interim) result export
-            if self.logSTATS or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
+            if self.logStats or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
                 sampleTemp = self.generate_data()
-                stats = composite_metric(real_data=self.inputDataset, array_synth=sampleTemp)
-                stats_values.append(stats)
+                stats = composite_metric(self.arr_real, sampleTemp, self.arr_featuresReal, self.arr_timeFeaturesReal)
+                stats_list.append(stats)
+
                 # Save models
                 if (self.saveModels and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
@@ -255,22 +264,21 @@ class GAN(nn.Module):
                 if (self.savePlots and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                     os.makedirs(epochPlotPath)
-                    create_plots(self.inputDataset, sampleTemp, epochPlotPath)
-                    
-                    if epoch == self.params["checkForMinStats"]:
-                        min_stat = min(stats_values)
-                    if epoch > self.params["checkForMinStats"] and stats < min_stat:
-                        min_stat = stats
+                    create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.df_trendsReal, sampleTemp, epochPlotPath)
+                    if epoch == self.params['checkForMinStats']:
+                        minStat = min(stats_list)
+                    if epoch > self.params['checkForMinStats'] and stats < minStat:
+                        minStat = stats
                     if epoch + 1 == self.epochCount:
                         create_html(self.plotPath)
-                elif self.logSTATS:
-                    if epoch == self.params["checkForMinStats"]:
-                        min_stat = min(stats_values)
-                    if epoch > self.params["checkForMinStats"] and stats < min_stat:
-                        min_stat = stats
+                elif self.logStats:
+                    if epoch == self.params['checkForMinStats']:
+                        minStat = min(stats_list)
+                    if epoch > self.params['checkForMinStats'] and stats < minStat:
+                        minStat = stats
                         epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                         os.makedirs(epochPlotPath)
-                        create_plots(self.inputDataset, sampleTemp, epochPlotPath)
+                        create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.df_trendsReal, sampleTemp, epochPlotPath)
                         epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
                         os.makedirs(epochSamplePath)
                         export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
@@ -282,19 +290,19 @@ class GAN(nn.Module):
                     export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
 
             # Log progress offline
-            logs_dict = {'epoch': epoch} | log_dict if not self.logSTATS else {'epoch': epoch} | log_dict | {'stats': stats}
+            logs_dict = {'epoch': epoch} | log_dict if not self.logStats else {'epoch': epoch} | log_dict | {'stats': stats}
             logs.append(logs_dict)
 
         # Save logged parameters
         df_log = pd.DataFrame(logs)
         df_log.to_csv(self.logPath / 'log.csv', index = False)
         
-        # Plot stats progress at the end of training if we have collected stats
-        if len(stats_values) > 0:
+        # Plot stats progress at the end of training
+        if len(stats_list) > 0:
             # Extract epochs for which we have stats values
             stat_epochs = [logs[i]['epoch'] + 1 for i in range(len(logs)) if 'stats' in logs[i]]
             # Plot the stats progress
-            stats_fig = plot_stats_progress(stat_epochs, stats_values, self.plotPath)
+            plot_stats_progress(stat_epochs, stats_list, self.plotPath)
 
 
     def compute_gradient_penalty(self, model, xReal, xFake, device):
