@@ -55,7 +55,7 @@ def calc_features(arr, axis):
         arr.max(axis = axis),
         np.median(arr, axis = axis),
         skew(arr, axis = axis),
-        arr.ptp(axis = axis),
+        np.ptp(arr, axis = axis),
         np.percentile(arr, 25, axis = axis),
         np.percentile(arr, 75, axis = axis)
     ])
@@ -176,29 +176,47 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
     
     # Calculate all metrics
     histSimilarity = histogram_similarity(arr_real, arr_synth)
-    profileFeaturesDistance = np.mean((arr_featuresReal - calc_features(arr_synth, axis = 0))**2)
-    timeFeaturesDistance = np.mean((arr_timeFeaturesReal - calc_features(arr_synth, axis = 1))**2)
+    # Feature normalization for profile features
+    arr_featuresSynth = calc_features(arr_synth, axis=0)
+    # Store reference values if this is the first run
+    if not all(hasattr(composite_metric, attr) for attr in ['feature_means', 'feature_stds']):
+        # Calculate mean and std for each feature type (mean, std, min, max, etc.)
+        feature_means = np.mean(arr_featuresReal, axis=1, keepdims=True)  # Shape: (9, 1)
+        feature_stds_inverted = 1 / np.std(arr_featuresReal, axis=1, keepdims=True)    # Shape: (9, 1)
+        
+        # Store normalization parameters
+        composite_metric.feature_means = feature_means
+        composite_metric.feature_stds_inverted = feature_stds_inverted
+        
+    # Z-score normalize each feature using reference statistics
+    normalized_synth_features = (arr_featuresSynth - composite_metric.feature_means) * composite_metric.feature_stds_inverted
+     
+    synth_feature_stats = np.concatenate([
+        np.mean(normalized_synth_features, axis=1),  # Mean of each feature
+        np.std(normalized_synth_features, axis=1)    # Std of each feature
+    ])
+
+    real_feature_stats = np.ones(shape=synth_feature_stats.shape)
+    # MSE between real and synthetic feature statistics (all equally weighted)
+    profileFeaturesDistance = np.mean((real_feature_stats - synth_feature_stats)**2)   
     
     # Normalize using reference values from initial run
     reference_values = {
         'hist_similarity': getattr(composite_metric, 'ref_hist_similarity', histSimilarity),
         'profile_features_distance': getattr(composite_metric, 'ref_profile_features', profileFeaturesDistance),
-        'time_features_distance': getattr(composite_metric, 'ref_time_features', timeFeaturesDistance)
     }
     
     # Store reference values if this is the first run
-    if not hasattr(composite_metric, 'ref_stats_rmse'):
+    if not hasattr(composite_metric, 'ref_hist_similarity'):
         composite_metric.ref_hist_similarity = histSimilarity
         composite_metric.ref_profile_features = profileFeaturesDistance
-        composite_metric.ref_time_features = timeFeaturesDistance
     
     # Normalize each metric by its reference value
     histSimilarityNorm = histSimilarity/reference_values['hist_similarity']
     profileFeaturesDistanceNorm = profileFeaturesDistance/reference_values['profile_features_distance']
-    timeFeaturesDistanceNorm = timeFeaturesDistance/reference_values['time_features_distance']
     
     # Combine with appropriate weights
-    return 0.4*histSimilarityNorm + 0.3*profileFeaturesDistanceNorm + 0.3*timeFeaturesDistanceNorm
+    return 0.5*histSimilarityNorm + 0.5*profileFeaturesDistanceNorm
 
 ########################################################################################################################
 
