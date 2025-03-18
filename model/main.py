@@ -118,8 +118,8 @@ class GAN(nn.Module):
         self.arr_dt = pd.to_datetime(self.inputDataset.index)
         del self.inputDataset
         self.arr_featuresReal = calc_features(self.arr_real, axis = 0)
-        self.df_trendsReal = compute_trends(self.arr_real, self.arr_dt, type_ = 'real')
         self.arr_timeFeaturesReal = calc_features(self.arr_real, axis = 1)
+        self.trendReal_dict = compute_trends(self.arr_real, self.arr_dt)
 
 
     def train(self):
@@ -264,7 +264,7 @@ class GAN(nn.Module):
                 if (self.savePlots and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
                     epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                     os.makedirs(epochPlotPath)
-                    create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.df_trendsReal, sampleTemp, epochPlotPath)
+                    create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
                     if epoch == self.params['checkForMinStats']:
                         minStat = min(stats_list)
                     if epoch > self.params['checkForMinStats'] and stats < minStat:
@@ -278,7 +278,7 @@ class GAN(nn.Module):
                         minStat = stats
                         epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
                         os.makedirs(epochPlotPath)
-                        create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.df_trendsReal, sampleTemp, epochPlotPath)
+                        create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
                         epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
                         os.makedirs(epochSamplePath)
                         export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)

@@ -1,9 +1,11 @@
-import pandas as pd
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
 from scipy.stats import skew
 from pathlib import Path
+from numba import njit
 import re
 import json
 
@@ -93,40 +95,127 @@ def plot_mean_profiles(arr_real, arr_synth):
 
 ########################################################################################################################
 
-def compute_trends(arr, arr_dt, type_, res = ['hour', 'day', 'week', 'month'], stats = ['mean', 'std', 'min', 'max', 'median', 'skew']):
-    dfs = []
-    df = pd.DataFrame(arr)
-    df.index = arr_dt
-    df.index.week = df.index.isocalendar().week
-    for item in res:
-        df_group = df.groupby([getattr(df.index, item)]).agg(stats)
-        df_group = df_group.T.groupby(level = 1).mean()
-        df_group.columns = np.arange(df_group.shape[1])
-        df_group = df_group.T
-        df_group['type'] = type_
-        df_group['res'] = item
-        df_group['time'] = df_group.index.astype(int)
-        dfs.append(df_group)
-    return pd.concat(dfs)
+@njit
+def compute_group_stats(X, sortedIdx, boundaries, groupCount, colCount):
+    out = np.empty((groupCount, 6), dtype = np.float32)
+    for i in range(groupCount):
+        start, end = boundaries[i], boundaries[i + 1]
+        groupSize = end - start
+        meanTotal, stdTotal, minTotal, maxTotal, medianTotal, skewTotal = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+        for j in range(colCount):
+            n = groupSize
+            tmp = np.empty(n, dtype = np.float32)
+            for k in range(n):
+                tmp[k] = X[sortedIdx[start + k], j]
+
+            # Compute mean, min and max in one pass.
+            s = tmp[0]
+            min = tmp[0]
+            max = tmp[0]
+            for k in range(1, n):
+                v = tmp[k]
+                s += v
+                if v < min:
+                    min = v
+                if v > max:
+                    max = v
+            mean = s/n
+
+            # Compute standard deviation and the third central moment for skew.
+            ssd = 0.0
+            scd = 0.0
+            for k in range(n):
+                diff = tmp[k] - mean
+                ssd += diff*diff
+                scd += diff*diff*diff
+            std = np.sqrt(ssd/n)
+
+            # Compute median via sorting.
+            arr = tmp.copy()
+            arr.sort()
+            if n%2 == 1:
+                median = arr[n//2]
+            else:
+                median = 0.5*(arr[n//2 - 1] + arr[n//2])
+            
+            # Compute skew; if std is zero, define skew as 0.
+            if std == 0:
+                skew_val = 0.0
+            else:
+                skew_val = (scd/n)/(std**3)
+
+            meanTotal += mean
+            stdTotal += std
+            medianTotal += median
+            minTotal += min
+            maxTotal += max
+            skewTotal += skew_val
+        
+        out[i, 0] = meanTotal/colCount
+        out[i, 1] = stdTotal/colCount
+        out[i, 2] = medianTotal/colCount
+        out[i, 3] = minTotal/colCount
+        out[i, 4] = maxTotal/colCount
+        out[i, 5] = skewTotal/colCount
+    return out
 
 
-def plot_mean_trends(df_trend, res, stats = ['mean', 'std', 'median', 'min', 'max', 'skew']):
-    df_trend = df_trend.melt(id_vars = ['type', 'time'], value_vars = stats, var_name = 'statistic', value_name = 'value')
-    df_trend['time'] = df_trend['time'].astype(int, errors = 'raise')
-    fig = sns.FacetGrid(df_trend, col = 'statistic', col_wrap = 3, sharex = False, sharey = False, height = 3.26, aspect = 1.5)
-    fig.map_dataframe(sns.lineplot, x = 'time', y = 'value', hue = 'type', style = 'type')
-    fig.set_axis_labels('time')
-    fig.axes.flat[0].set_ylabel('value')
-    fig.axes.flat[3].set_ylabel('value')
-    fig.axes.flat[0].legend()
-    plt.suptitle(f'{res.capitalize()}ly trend'.replace('Day', 'Dai'), fontweight = 'bold')
-    plt.tight_layout()
-    plt.close()
-    return fig.fig
+def compute_trends(arr, arr_dt, res = ['hour', 'day', 'week', 'month']):
+    trend_dict = {}
+    groups = {}
+    if 'hour' in res:
+        groups['hour'] = arr_dt.hour.to_numpy()
+    if 'day' in res:
+        groups['day'] = arr_dt.day.to_numpy()
+    if 'week' in res:
+        groups['week'] = arr_dt.isocalendar().week.to_numpy()
+    if 'month' in res:
+        groups['month'] = arr_dt.month.to_numpy()
+
+    for key in res:
+        groupKeys = groups[key]
+        sortedIdx = np.argsort(groupKeys)
+        sortedKeys = groupKeys[sortedIdx]
+        boundaries = [0]
+        for idx in range(1, len(sortedKeys)):
+            if sortedKeys[idx] != sortedKeys[idx - 1]:
+                boundaries.append(idx)
+        boundaries.append(len(sortedKeys))
+        boundaries = np.array(boundaries)
+        groupCount = len(boundaries) - 1
+        arr_trend = compute_group_stats(arr, sortedIdx, boundaries, groupCount, arr.shape[1])
+        trend_dict[key] = arr_trend
+    return trend_dict
+
+
+def plot_mean_trends(trendReal_dict, trendSynth_dict):
+    trendPlot_dict = {}
+    stats = ['mean', 'std', 'median', 'min', 'max', 'skew']
+    #Order must align with `compute_group_stats`!
+    
+    for key in trendReal_dict.keys():
+        fig, axs = plt.subplots(2, 3, figsize = (18, 8))
+        axs = axs.flatten()
+        x = range(1, trendReal_dict[key].shape[0] + 1)
+
+        for idx, stat in enumerate(stats):
+            axs[idx].plot(x, trendReal_dict[key][:, idx], label = 'Real', color = 'aqua')
+            axs[idx].plot(x, trendSynth_dict[key][:, idx], label = 'Synthetic', color = 'hotpink')
+            axs[idx].set_title(stat)
+            if idx == 0:
+                axs[idx].legend()
+        
+        fig.supxlabel('time', fontsize = 12, fontweight = 'bold')
+        fig.supylabel('value', fontsize = 12, fontweight = 'bold')
+        plt.suptitle(f'{key.capitalize()}ly trend'.replace('Day', 'Dai'), fontweight = 'bold')
+        plt.tight_layout()
+        plt.close()
+        trendPlot_dict[f'{key}ly_trend'.replace('day', 'dai')] = fig
+    return trendPlot_dict
 
 ########################################################################################################################
 
-def create_plots(arr_real, arr_featuresReal, arr_dt, df_trendReal, arr_synth, outputPath = None, createPlots = True, plotTrends = True):
+def create_plots(arr_real, arr_featuresReal, arr_dt, trendReal_dict, arr_synth, outputPath = None, createPlots = True, plotTrends = True):
     fig_dict = {}
 
     arr_synth = arr_synth[:, 1:].astype(np.float32)
@@ -144,15 +233,14 @@ def create_plots(arr_real, arr_featuresReal, arr_dt, df_trendReal, arr_synth, ou
 
         if plotTrends:
             # Compute trends
-            df_trendSynth = compute_trends(arr_synth, arr_dt, type_ = 'synth')
-            df_trend = pd.concat([df_trendReal, df_trendSynth])
+            trendSynth_dict = compute_trends(arr_synth, arr_dt)
             
-            # Mean trends
-            for res in df_trend['res'].unique():
-                fig_dict[f'{res}ly_trend'.replace('day', 'dai')] = plot_mean_trends(df_trend[df_trend['res'] == res], res)
+            # Plot mean trends
+            trendPlot_dict = plot_mean_trends(trendReal_dict, trendSynth_dict)
+            fig_dict = fig_dict | trendPlot_dict
 
         for key, value in fig_dict.items():
-            value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight')
+            value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight', dpi = 100)
 
 ########################################################################################################################
 
@@ -183,6 +271,7 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
         # Calculate mean and std for each feature type (mean, std, min, max, etc.)
         feature_means = np.mean(arr_featuresReal, axis=1, keepdims=True)  # Shape: (9, 1)
         feature_stds_inverted = 1 / np.std(arr_featuresReal, axis=1, keepdims=True)    # Shape: (9, 1)
+        feature_stds_inverted[np.isinf(feature_stds_inverted)] = 1
         
         # Store normalization parameters
         composite_metric.feature_means = feature_means

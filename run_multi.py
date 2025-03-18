@@ -24,13 +24,13 @@ OUTPUT_FORMAT = '.npy'
 LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
-USE_WANDB = True
+USE_WANDB = False
 
 # Set the number of epochs
-EPOCH_COUNT = 1000
+EPOCH_COUNT = 2
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 50
+SAVE_FREQ = 1
 SAVE_MODELS = False
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
