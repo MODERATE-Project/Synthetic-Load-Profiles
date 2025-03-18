@@ -267,7 +267,7 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
     # Feature normalization for profile features
     arr_featuresSynth = calc_features(arr_synth, axis=0)
     # Store reference values if this is the first run
-    if not all(hasattr(composite_metric, attr) for attr in ['feature_means', 'feature_stds']):
+    if not all(hasattr(composite_metric, attr) for attr in ['feature_means', 'feature_stds_inverted']):
         # Calculate mean and std for each feature type (mean, std, min, max, etc.)
         feature_means = np.mean(arr_featuresReal, axis=1, keepdims=True)  # Shape: (9, 1)
         feature_stds_inverted = 1 / np.std(arr_featuresReal, axis=1, keepdims=True)    # Shape: (9, 1)
