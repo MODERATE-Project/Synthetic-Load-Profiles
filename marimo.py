@@ -7,12 +7,15 @@ app = marimo.App(width="medium")
 @app.cell
 def _():
     import marimo as mo
+    import io
     from io import StringIO
     import csv
+    import gzip
+    import torch
     import pandas as pd
 
     from main import run
-    return StringIO, csv, mo, pd, run
+    return StringIO, csv, gzip, io, mo, pd, run, torch
 
 
 @app.cell
@@ -24,6 +27,13 @@ def _(StringIO, csv, pd):
         df = pd.read_csv(data, sep = sep)
         df = df.set_index(df.columns[0])
         return df
+
+
+    #def get_model_state(modelFile):
+    #    buffer = io.BytesIO(modelFile.value[0].contents)
+    #    with gzip.GzipFile(fileobj = buffer) as file:
+    #        modelState = torch.load(file, weights_only = False)
+    #    return modelState
 
 
     def to_boolean(str_):
@@ -51,7 +61,7 @@ def _(mo):
     checkForMinStats = mo.ui.number(start = 1, step = 1, value = 100, label = 'Check for improving metric after this epoch:')
     # Work with existing model
     modelFileLabel = mo.md('Model:')
-    modelFile = mo.ui.file(label = 'Upload', filetypes = ['.pt.gz'])
+    modelFile = mo.ui.file_browser(label = 'Upload', multiple = False)
     createData = mo.ui.radio(options = ['yes', 'no'], value = 'yes', inline = True, label = 'Create data ¹:')
     createDataFootnote = mo.md('<div style="text-align: right">¹ <sub>If no, continue training</sub></div>')
 
@@ -184,6 +194,7 @@ def _(
     lrDis,
     lrGen,
     mo,
+    modelFile,
     modelType,
     outputFormat,
     pd,
@@ -215,8 +226,11 @@ def _(
             params['lrGen'] = float(lrGen.value)
             params['lrDis'] = float(lrDis.value)
             params['genLoopCount'] = loopCountGen.value
-            inputFileProcd = read_csv(inputFile)
-            inputFileProcd.index = pd.to_datetime(inputFileProcd.index, format = 'mixed')
+            if inputFile.value:
+                inputFileProcd = read_csv(inputFile)
+                inputFileProcd.index = pd.to_datetime(inputFileProcd.index, format = 'mixed')
+            else:
+                inputFileProcd = None
             run(
                 params = params,
                 modelType = modelType.value,
@@ -224,7 +238,7 @@ def _(
                 inputFile = inputFileProcd,
                 logStats = to_boolean(logStats.value),
                 useWandb = to_boolean(useWandb.value),
-                modelPath = None,
+                modelPath = modelFile.value[0].id,
                 createData = to_boolean(createData.value),
                 useMarimo = True
             )
