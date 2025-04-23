@@ -238,7 +238,7 @@ def _(
                 inputFile = inputFileProcd,
                 logStats = to_boolean(logStats.value),
                 useWandb = to_boolean(useWandb.value),
-                modelPath = modelFile.value[0].id,
+                modelPath = modelFile.value[0].id if modelFile.value else None,
                 createData = to_boolean(createData.value),
                 useMarimo = True
             )
