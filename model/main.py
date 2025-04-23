@@ -124,8 +124,8 @@ class GAN(nn.Module):
 
     def train(self):
         logs = []
-        stats_list = []  #track all RMSE values
-        minStat = float(1)  #initialize with 1 as this is the start value in the first epoch (stats are normalize based on first epoch)
+        stats_list = [] #track all RMSE values
+        minStat = float(1)  #initialize with 1 as this is the start value in the first epoch (stats are normalized based on first epoch)
 
         # Create progress bar
         if not self.useMarimo:
@@ -302,11 +302,14 @@ class GAN(nn.Module):
             # Extract epochs for which we have stats values
             stat_epochs = [logs[i]['epoch'] + 1 for i in range(len(logs)) if 'stats' in logs[i]]
             # Plot the stats progress
-            plot_stats_progress(stat_epochs, stats_list, self.plotPath)
+            if len(stat_epochs) > 0:
+                plot_stats_progress(stat_epochs, stats_list, self.plotPath)
 
 
     def compute_gradient_penalty(self, model, xReal, xFake, device):
-        """Computes the gradient penalty for the WGAN method."""
+        """
+        Computes the gradient penalty for the WGAN method.
+        """
         epsilon = torch.rand(xReal.shape[0], 1, 1, 1, device = device)  #interpolation factor
         interpolated = (epsilon*xReal + (1 - epsilon)*xFake).requires_grad_(True)
 

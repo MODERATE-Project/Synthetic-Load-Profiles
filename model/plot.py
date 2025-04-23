@@ -13,22 +13,26 @@ import json
 features = ['means', 'standard deviations', 'minima', 'maxima', 'medians', 'skews', 'peak to peak ranges', 'lower quartiles', 'upper quartiles']
 #Order must align with `calc_features`!
 
-########################################################################################################################
+############################################################################################
 
-def plot_distrib(arr_real, arr_synth):
+def plot_distrib(
+        arr_real, arr_synth,
+        xlabel = 'electricity consumption [kW]',
+        ylabel = 'frequency of values occuring'
+    ):
     fig = plt.figure(figsize = (7, 5))
     plt.hist(arr_real.flatten(), bins = 100, alpha = 0.5, label = 'Real', color = 'aqua')
     plt.hist(arr_synth.flatten(), bins = 100, alpha = 0.5, label = 'Synthetic', color = 'hotpink')
     plt.title('Value distributions', fontweight = 'bold')
-    plt.xlabel('electricity consumption [kW]', fontweight = 'bold')
-    plt.ylabel('frequency of values occuring', fontweight = 'bold')
+    plt.xlabel(xlabel, fontweight = 'bold')
+    plt.ylabel(ylabel, fontweight = 'bold')
     plt.legend()
     plt.grid()
     plt.tight_layout()
     plt.close()
     return fig
 
-########################################################################################################################
+############################################################################################
 
 def plot_stat(arr_featureReal, arr_featureSynth, ax, title, descrFontSize = 7):
     box_dict = ax.boxplot([arr_featureReal, arr_featureSynth], vert = True)
@@ -74,7 +78,7 @@ def plot_stats(arr_featuresReal, arr_featuresSynth):
     plt.close()
     return fig
 
-########################################################################################################################
+############################################################################################
 
 def plot_mean_profiles(arr_real, arr_synth):
     maxCols = min([arr_real.shape[1], arr_synth.shape[1]])
@@ -93,7 +97,7 @@ def plot_mean_profiles(arr_real, arr_synth):
     plt.close()
     return fig
 
-########################################################################################################################
+############################################################################################
 
 @njit
 def compute_group_stats(X, sortedIdx, boundaries, groupCount, colCount):
@@ -213,7 +217,7 @@ def plot_mean_trends(trendReal_dict, trendSynth_dict):
         trendPlot_dict[f'{key}ly_trend'.replace('day', 'dai')] = fig
     return trendPlot_dict
 
-########################################################################################################################
+############################################################################################
 
 def create_plots(arr_real, arr_featuresReal, arr_dt, trendReal_dict, arr_synth, outputPath = None, createPlots = True, plotTrends = True):
     fig_dict = {}
@@ -242,7 +246,7 @@ def create_plots(arr_real, arr_featuresReal, arr_dt, trendReal_dict, arr_synth, 
         for key, value in fig_dict.items():
             value.savefig(outputPath / f'{key}.png', bbox_inches = 'tight', dpi = 100)
 
-########################################################################################################################
+############################################################################################
 
 def histogram_similarity(arr_real, arr_synth, bins = 50):
     arr_flatReal = arr_real.flatten()
@@ -307,7 +311,7 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
     # Combine with appropriate weights
     return 0.5*histSimilarityNorm + 0.5*profileFeaturesDistanceNorm
 
-########################################################################################################################
+############################################################################################
 
 def plot_stats_progress(epochs, stats_list, outputPath = None):
     """
@@ -335,7 +339,7 @@ def plot_stats_progress(epochs, stats_list, outputPath = None):
         plt.savefig(outputPath / 'stats_progress.png', bbox_inches = 'tight', dpi = 150)
     plt.close()
     
-########################################################################################################################
+############################################################################################
 
 def create_html(path):
   path =  path
