@@ -348,15 +348,16 @@ class GAN(nn.Module):
         with gzip.open(path / f'epoch_{epoch + 1}.pt.gz', 'wb') as file:
             torch.save(model, file)
 
-    def generate_data(self):
-        noise = randn(self.dataset.shape[0], self.dimNoise, 1, 1, device = self.device)
-        xSynth = self.Gen(noise)
-        xSynth = xSynth.cpu().detach().numpy()
-        xSynth = invert_min_max_scaler(xSynth, self.arr_minMax, FEATURE_RANGE)
-        xSynth = revert_reshape_arr(xSynth)
-        idx = self.dfIdx[:self.dfIdx.get_loc('#####0')]
-        xSynth = xSynth[:len(idx)]
-        xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
+    def generate_data(self): 
+        with torch.no_grad():
+            noise = randn(self.dataset.shape[0], self.dimNoise, 1, 1, device = self.device)
+            xSynth = self.Gen(noise)
+            xSynth = xSynth.cpu().detach().numpy()
+            xSynth = invert_min_max_scaler(xSynth, self.arr_minMax, FEATURE_RANGE)
+            xSynth = revert_reshape_arr(xSynth)
+            idx = self.dfIdx[:self.dfIdx.get_loc('#####0')]
+            xSynth = xSynth[:len(idx)]
+            xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
         return xSynth
 
 
