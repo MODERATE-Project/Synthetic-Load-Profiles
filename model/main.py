@@ -7,6 +7,7 @@ from tqdm import tqdm
 import torch
 import numpy as np
 import gzip
+from contextlib import nullcontext
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
 from model.plot import calc_features, compute_trends, create_plots, create_html, composite_metric, plot_stats_progress
@@ -27,9 +28,10 @@ class Generator(nn.Module):
 
 
 class Discriminator(nn.Module):
-    def __init__(self, model):
+    def __init__(self, model, model_type='GAN'):
         super(Discriminator, self).__init__()
         self.model = model
+        self.model_type = model_type
     
     def forward(self, data):
         output = self.model(data).flatten()
@@ -68,6 +70,10 @@ class GAN(nn.Module):
         for key, value in self.params.items():
             setattr(self, key, value)
 
+        # Override loss function for GAN with BCEWithLogitsLoss for autocast compatibility
+        if self.modelType == 'GAN':
+            self.lossFct = nn.BCEWithLogitsLoss()
+
         # Get layers
         if self.modelType == 'GAN':
             from model.GAN_layers import layersGen, layersDis
@@ -81,7 +87,7 @@ class GAN(nn.Module):
 
         # Initialize generator and discriminator
         self.Gen = Generator(model = self.layersGen).to(device = self.device)
-        self.Dis = Discriminator(model = self.layersDis).to(device = self.device)
+        self.Dis = Discriminator(model = self.layersDis, model_type = self.modelType).to(device = self.device)
         self.optimGen = optim.Adam(params = self.Gen.parameters(), lr = self.lrGen, betas = self.betas)
         self.optimDis = optim.Adam(params = self.Dis.parameters(), lr = self.lrDis, betas = self.betas)
 
@@ -127,6 +133,10 @@ class GAN(nn.Module):
         stats_list = []  #track all RMSE values
         minStat = float(1)  #initialize with 1 as this is the start value in the first epoch (stats are normalize based on first epoch)
 
+        # Set up mixed precision training if on CUDA
+        use_amp = self.device.type == 'cuda'
+        scaler = torch.cuda.amp.GradScaler() if use_amp else None
+
         # Create progress bar
         if not self.useMarimo:
             progress = tqdm(range(self.epochCount))
@@ -160,34 +170,49 @@ class GAN(nn.Module):
 
                     # Train discriminator with real data
                     self.Dis.zero_grad()
-                    yReal = self.Dis(xReal)
-                    lossDisReal = self.lossFct(yReal, labelsReal)
-                    lossDisReal.backward()
+                    with torch.amp.autocast(device_type='cuda') if use_amp else nullcontext():
+                        yReal = self.Dis(xReal)
+                        lossDisReal = self.lossFct(yReal, labelsReal)
+                    
+                    if use_amp:
+                        scaler.scale(lossDisReal).backward()
+                    else:
+                        lossDisReal.backward()
 
                     # Train discriminator with fake data
-                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
-                    xFake = self.Gen(noise)
-                    yFake = self.Dis(xFake.detach())
-                    lossDisFake = self.lossFct(yFake, labelsFake)
-                    lossDisFake.backward()
+                    with torch.amp.autocast(device_type='cuda') if use_amp else nullcontext():
+                        noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
+                        xFake = self.Gen(noise)
+                        yFake = self.Dis(xFake.detach())
+                        lossDisFake = self.lossFct(yFake, labelsFake)
+                    
+                    if use_amp:
+                        scaler.scale(lossDisFake).backward()
+                    else:
+                        lossDisFake.backward()
                 
                 elif self.modelType == 'WGAN':
                     # Generate fake data
-                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
-                    xFake = self.Gen(noise).detach()
+                    with torch.amp.autocast(device_type='cuda') if use_amp else nullcontext():
+                        noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
+                        xFake = self.Gen(noise).detach()
 
-                    # Compute discriminator loss
-                    self.Dis.zero_grad()
-                    yReal = self.Dis(xReal)
-                    yFake = self.Dis(xFake)
-                    lossDis = yFake.mean() - yReal.mean()
+                        # Compute discriminator loss
+                        self.Dis.zero_grad()
+                        yReal = self.Dis(xReal)
+                        yFake = self.Dis(xFake)
+                        lossDis = yFake.mean() - yReal.mean()
 
-                    # Compute gradient penalty
-                    GP = self.compute_gradient_penalty(self.Dis, xReal, xFake, self.device)
+                        # Compute gradient penalty
+                        GP = self.compute_gradient_penalty(self.Dis, xReal, xFake, self.device)
 
-                    # Add penalty term to loss
-                    lossDisTotal = lossDis + self.lambdaGP*GP
-                    lossDisTotal.backward()
+                        # Add penalty term to loss
+                        lossDisTotal = lossDis + self.lambdaGP*GP
+                    
+                    if use_amp:
+                        scaler.scale(lossDisTotal).backward()
+                    else:
+                        lossDisTotal.backward()
 
                 # Update logged gradients of discriminator
                 for moduleName, module in self.Dis.named_modules():
@@ -200,21 +225,27 @@ class GAN(nn.Module):
                                 gradDis_dict[key] += param.grad.norm().cpu().item()
 
                 # Update weights and biases of the discriminator
-                self.optimDis.step()
+                if use_amp:
+                    scaler.step(self.optimDis)
+                else:
+                    self.optimDis.step()
 
                 # Train generator
                 for idx in range(self.genLoopCount):
                     self.Gen.zero_grad()
-                    noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
-                    xFake = self.Gen(noise)
-                    yFakeNew = self.Dis(xFake)
+                    with torch.amp.autocast(device_type='cuda') if use_amp else nullcontext():
+                        noise = randn(xReal.shape[0], self.dimNoise, 1, 1, device = self.device)
+                        xFake = self.Gen(noise)
+                        yFakeNew = self.Dis(xFake)
 
-                    if self.modelType == 'GAN':
-                        lossGen = self.lossFct(yFakeNew, labelsReal).clone()
-                        lossGen.backward()
-
-                    elif self.modelType == 'WGAN':
-                        lossGen = -yFakeNew.mean()
+                        if self.modelType == 'GAN':
+                            lossGen = self.lossFct(yFakeNew, labelsReal).clone()
+                        elif self.modelType == 'WGAN':
+                            lossGen = -yFakeNew.mean()
+                    
+                    if use_amp:
+                        scaler.scale(lossGen).backward()
+                    else:
                         lossGen.backward()
                 
                     # Update logged gradients of generator
@@ -229,7 +260,11 @@ class GAN(nn.Module):
                                         gradGen_dict[key] += param.grad.norm().cpu().item()
 
                     # Update weights and biases of the generator
-                    self.optimGen.step()
+                    if use_amp:
+                        scaler.step(self.optimGen)
+                        scaler.update()
+                    else:
+                        self.optimGen.step()
 
                 # Update logged losses
                 if self.modelType == 'GAN':
@@ -238,6 +273,10 @@ class GAN(nn.Module):
                 elif self.modelType == 'WGAN':
                     loss_dict['_Dis.loss'] += lossDisTotal.cpu().item()
                 loss_dict['_Gen.loss'] += lossGen.cpu().item()
+                
+                # Free memory during training
+                if batchIdx % 10 == 0 and self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
 
             # Log progress (average losses and gradient norms per epoch)
             log_dict = {key: value/len(self.dataLoader) for key, value in loss_dict.items()} | \
@@ -247,6 +286,10 @@ class GAN(nn.Module):
             # Log progress with wandb 
             if self.wandb:
                 self.wandb.log(log_dict)
+            
+            # Clean up GPU memory between epochs
+            if self.device.type == 'cuda':
+                torch.cuda.empty_cache()
             
             # Generate sample for (interim) result export
             if self.logStats or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
@@ -311,7 +354,8 @@ class GAN(nn.Module):
         interpolated = (epsilon*xReal + (1 - epsilon)*xFake).requires_grad_(True)
 
         # Compute critic output on interpolated samples
-        interpolatedOutput = model(interpolated)
+        with torch.amp.autocast(device_type='cuda', enabled=False):  # Use full precision for gradient penalty
+            interpolatedOutput = model(interpolated)
 
         # Compute gradients w.r.t. the interpolated samples
         gradients = torch.autograd.grad(
@@ -346,9 +390,26 @@ class GAN(nn.Module):
             torch.save(model, file)
 
     def generate_data(self):
-        noise = randn(self.dataset.shape[0], self.dimNoise, 1, 1, device = self.device)
-        xSynth = self.Gen(noise)
-        xSynth = xSynth.cpu().detach().numpy()
+        # Generate data in smaller batches to save memory
+        num_batches = (self.dataset.shape[0] + self.params["batchSize"] - 1) // self.params["batchSize"]
+        xSynth_list = []
+        with torch.no_grad():  # No need to track gradients during generation
+            for i in range(num_batches):
+                start_idx = i * self.params["batchSize"]
+                end_idx = min((i + 1) * self.params["batchSize"], self.dataset.shape[0])
+                current_batch_size = end_idx - start_idx
+                
+                noise = randn(current_batch_size, self.dimNoise, 1, 1, device = self.device)
+                xSynth_batch = self.Gen(noise)
+                xSynth_batch = xSynth_batch.cpu().numpy()  # Move to CPU immediately
+                xSynth_list.append(xSynth_batch)
+                
+                # Free memory
+                if self.device.type == 'cuda':
+                    torch.cuda.empty_cache()
+        
+        # Combine batches
+        xSynth = np.vstack(xSynth_list)
         xSynth = invert_min_max_scaler(xSynth, self.arr_minMax, FEATURE_RANGE)
         xSynth = revert_reshape_arr(xSynth)
         idx = self.dfIdx[:self.dfIdx.get_loc('#####0')]
