@@ -23,5 +23,6 @@ params = {
     'dimHidden': 16,
     'channelCount': 1,
     'outputFormat': '.npy',
-    'dropoutOffEpoch': 3000
+    'dropoutOffEpoch': 1000,
+    'dropout': 0.2
 }

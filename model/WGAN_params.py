@@ -13,7 +13,7 @@ params = {
     'labelReal': 1,
     'labelFake': 0,
     'saveFreq': 1000,
-    'genLoopCount': 1,
+    'genLoopCount': 2,
     'saveModels': False,
     'savePlots': True,
     'saveSamples': False,
@@ -22,5 +22,6 @@ params = {
     'dimHidden': 16,
     'channelCount': 1,
     'outputFormat': '.npy',
-    'dropoutOffEpoch': 100
+    'dropoutOffEpoch': 100,
+    'dropout': 0.08
 }
