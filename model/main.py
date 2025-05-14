@@ -8,6 +8,9 @@ import torch
 import numpy as np
 import gzip
 from contextlib import nullcontext
+import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor
+import copy
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
 from model.plot import calc_features, compute_trends, create_plots, create_html, composite_metric, plot_stats_progress
@@ -65,6 +68,7 @@ class GAN(nn.Module):
         self.logStats = logStats
         self.wandb = wandb
         self.useMarimo = useMarimo
+        self.last_saved_model_path = None  # Track the last saved model path
 
         # Get parameters from `params.py`
         for key, value in self.params.items():
@@ -127,6 +131,8 @@ class GAN(nn.Module):
         self.arr_timeFeaturesReal = calc_features(self.arr_real, axis = 1)
         self.trendReal_dict = compute_trends(self.arr_real, self.arr_dt)
 
+        # Setup thread pool for background saving
+        self.executor = ThreadPoolExecutor(max_workers=3)  # Increased to handle multiple background tasks
 
     def train(self):
         logs = []
@@ -297,40 +303,65 @@ class GAN(nn.Module):
                 stats = composite_metric(self.arr_real, sampleTemp, self.arr_featuresReal, self.arr_timeFeaturesReal)
                 stats_list.append(stats)
 
-                # Save models
-                if (self.saveModels and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
-                    epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
-                    os.makedirs(epochModelPath)
-                    self.save_model_state(epoch, epochModelPath)
-
-                # Save plots
-                if (self.savePlots and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
-                    epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
-                    os.makedirs(epochPlotPath)
-                    create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
-                    if epoch == self.params['checkForMinStats']:
-                        minStat = min(stats_list)
-                    if epoch > self.params['checkForMinStats'] and stats < minStat:
-                        minStat = stats
-                    if epoch + 1 == self.epochCount:
-                        create_html(self.plotPath)
-                elif self.logStats:
-                    if epoch == self.params['checkForMinStats']:
-                        minStat = min(stats_list)
-                    if epoch > self.params['checkForMinStats'] and stats < minStat:
-                        minStat = stats
+                # Update minStat value
+                if epoch == self.params['checkForMinStats']:
+                    minStat = min(stats_list)
+                
+                # Check if we have a new best model
+                is_best_model = epoch > self.params['checkForMinStats'] and stats < minStat
+                if is_best_model:
+                    minStat = stats
+                
+                # Regular interval saving
+                if (epoch + 1) % self.saveFreq == 0:
+                    # Save models
+                    if self.saveModels:
+                        epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochModelPath, exist_ok=True)
+                        
+                        self.save_model_state_background(epoch, epochModelPath)
+                        # Delete previous model if one exists
+                        if self.last_saved_model_path is not None and self.last_saved_model_path.exists():
+                            self.executor.submit(self._delete_previous_model, self.last_saved_model_path)
+                        self.last_saved_model_path = epochModelPath
+                    
+                    # Save plots
+                    if self.savePlots:
                         epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
-                        os.makedirs(epochPlotPath)
-                        create_plots(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
+                        os.makedirs(epochPlotPath, exist_ok=True)
+                        self.create_plots_background(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
+                        if epoch + 1 == self.epochCount:
+                            create_html(self.plotPath)  # Keep this synchronous as it's only at the end
+                    
+                    # Save samples
+                    if self.saveSamples:
                         epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
-                        os.makedirs(epochSamplePath)
-                        export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
-
-                # Save samples
-                if (self.saveSamples and (epoch + 1) % self.saveFreq == 0) or epoch + 1 == self.epochCount:
-                    epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
-                    os.makedirs(epochSamplePath)
-                    export_synthetic_data(sampleTemp, epochSamplePath, self.outputFormat)
+                        os.makedirs(epochSamplePath, exist_ok=True)
+                        self.export_synthetic_data_background(sampleTemp, epochSamplePath, self.outputFormat)
+                
+                # Save best model when we have a new best (logStats mode)
+                elif self.logStats and is_best_model:
+                    # Save plots for best model
+                    if self.savePlots:
+                        epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochPlotPath, exist_ok=True)
+                        self.create_plots_background(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
+                    
+                    # Save samples for best model
+                    if self.saveSamples:
+                        epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochSamplePath, exist_ok=True)
+                        self.export_synthetic_data_background(sampleTemp, epochSamplePath, self.outputFormat)
+                    
+                    # Save model for best model
+                    if self.saveModels:
+                        epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
+                        os.makedirs(epochModelPath, exist_ok=True)
+                        self.save_model_state_background(epoch, epochModelPath)
+                        # Delete previous model if one exists
+                        if self.last_saved_model_path is not None and self.last_saved_model_path.exists():
+                            self.executor.submit(self._delete_previous_model, self.last_saved_model_path)
+                        self.last_saved_model_path = epochModelPath
 
             # Log progress offline
             logs_dict = {'epoch': epoch} | log_dict if not self.logStats else {'epoch': epoch} | log_dict | {'stats': stats}
@@ -347,6 +378,8 @@ class GAN(nn.Module):
             # Plot the stats progress
             plot_stats_progress(stat_epochs, stats_list, self.plotPath)
 
+        # Clean up thread pool
+        self.executor.shutdown(wait=True)
 
     def compute_gradient_penalty(self, model, xReal, xFake, device):
         """Computes the gradient penalty for the WGAN method."""
@@ -389,6 +422,78 @@ class GAN(nn.Module):
         with gzip.open(path / f'epoch_{epoch + 1}.pt.gz', 'wb') as file:
             torch.save(model, file)
 
+    def save_model_state_background(self, epoch, path):
+        """Save model state in a background process to avoid interrupting training."""
+        # Copy state dictionaries and move tensors to CPU
+        gen_state_dict = {k: v.cpu() if isinstance(v, torch.Tensor) else v 
+                          for k, v in self.Gen.state_dict().items()}
+        dis_state_dict = {k: v.cpu() if isinstance(v, torch.Tensor) else v 
+                          for k, v in self.Dis.state_dict().items()}
+        
+        model = {
+            'epoch': epoch,
+            'profileCount': self.dataset.shape[0],
+            'dfIdx': self.dfIdx,
+            'minMax': self.arr_minMax,
+            'gen_layers': self.layersGen,
+            'dis_layers': self.layersDis,
+            'gen_state_dict': gen_state_dict,  # CPU tensors
+            'dis_state_dict': dis_state_dict,  # CPU tensors
+            'optim_gen_state_dict': self.optimGen.state_dict(),
+            'optim_dis_state_dict': self.optimDis.state_dict(),
+            'continued_from': self.modelStatePath,
+            'feature_range': FEATURE_RANGE
+        } | self.params
+        
+        # Create file path
+        filepath = path / f'epoch_{epoch + 1}.pt'
+        
+        # Submit the save task to the thread pool
+        self.executor.submit(self._save_model_to_file, model, filepath)
+
+    def _save_model_to_file(self, model, filepath):
+        """Helper function to save model to file from a background thread."""
+        with gzip.open(filepath, 'wb') as file:
+            torch.save(model, file)
+
+    def create_plots_background(self, real_data, features_real, dt, trend_real_dict, synth_data, plot_path):
+        """Create plots in a background thread to avoid interrupting training."""
+        # Create deep copies of numpy arrays to avoid race conditions
+        real_data_copy = real_data.copy()
+        features_real_copy = copy.deepcopy(features_real)
+        dt_copy = dt.copy()
+        trend_real_dict_copy = copy.deepcopy(trend_real_dict)
+        synth_data_copy = synth_data.copy()
+        
+        # Submit the plotting task to the thread pool
+        self.executor.submit(self._create_plots_in_background, 
+                             real_data_copy, 
+                             features_real_copy,
+                             dt_copy, 
+                             trend_real_dict_copy, 
+                             synth_data_copy, 
+                             plot_path)
+                             
+    def _create_plots_in_background(self, real_data, features_real, dt, trend_real_dict, synth_data, plot_path):
+        """Helper function to create plots in a background thread."""
+        create_plots(real_data, features_real, dt, trend_real_dict, synth_data, plot_path)
+        
+    def export_synthetic_data_background(self, arr, output_path, file_format, filename='example_synth_profiles'):
+        """Export synthetic data in a background thread."""
+        # Create a copy of the data to avoid race conditions
+        arr_copy = arr.copy()
+        
+        # Submit the export task to the thread pool
+        self.executor.submit(self._export_synthetic_data_in_background, 
+                            arr_copy, 
+                            output_path, 
+                            file_format, 
+                            filename)
+                            
+    def _export_synthetic_data_in_background(self, arr, output_path, file_format, filename='example_synth_profiles'):
+        """Helper function to export synthetic data in a background thread."""
+        export_synthetic_data(arr, output_path, file_format, filename)
+
     def generate_data(self):
         # Generate data in smaller batches to save memory
         num_batches = (self.dataset.shape[0] + self.params["batchSize"] - 1) // self.params["batchSize"]
@@ -416,6 +521,19 @@ class GAN(nn.Module):
         xSynth = xSynth[:len(idx)]
         xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
         return xSynth
+
+    def _delete_previous_model(self, model_path):
+        """Delete the previous model directory in background."""
+        try:
+            if os.path.isdir(model_path):
+                for file in os.listdir(model_path):
+                    file_path = os.path.join(model_path, file)
+                    if os.path.isfile(file_path):
+                        os.remove(file_path)
+                os.rmdir(model_path)
+                print(f"Deleted previous model at {model_path}")
+        except Exception as e:
+            print(f"Error deleting previous model: {e}")
 
 
 def generate_data_from_saved_model(modelStatePath):

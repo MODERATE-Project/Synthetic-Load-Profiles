@@ -26,3 +26,4 @@ params = {
     'dropoutOffEpoch': 1000,
     'dropout': 0.2
 }
+
