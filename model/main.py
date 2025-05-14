@@ -419,7 +419,7 @@ class GAN(nn.Module):
             'continued_from': self.modelStatePath,
             'feature_range': FEATURE_RANGE
         } | self.params
-        with gzip.open(path / f'epoch_{epoch + 1}.pt.gz', 'wb') as file:
+        with gzip.open(path / f'epoch_{epoch + 1}.pt', 'wb') as file:
             torch.save(model, file)
 
     def save_model_state_background(self, epoch, path):
@@ -453,8 +453,12 @@ class GAN(nn.Module):
 
     def _save_model_to_file(self, model, filepath):
         """Helper function to save model to file from a background thread."""
-        with gzip.open(filepath, 'wb') as file:
-            torch.save(model, file)
+        try:
+            with gzip.open(filepath, 'wb') as file:
+                torch.save(model, file)
+            print(f"Successfully saved model to {filepath}")
+        except Exception as e:
+            print(f"Error saving model to {filepath}: {e}")
 
     def create_plots_background(self, real_data, features_real, dt, trend_real_dict, synth_data, plot_path):
         """Create plots in a background thread to avoid interrupting training."""
@@ -537,19 +541,25 @@ class GAN(nn.Module):
 
 
 def generate_data_from_saved_model(modelStatePath):
-    with gzip.open(modelStatePath, 'rb') as file:
-        modelState = torch.load(file)
-    Gen = Generator(modelState['gen_layers'])
-    Gen.load_state_dict(modelState['gen_state_dict'])
-    noise = randn(modelState['profileCount'], modelState['dimNoise'], 1, 1, device = modelState['device'])
-    xSynth = Gen(noise)
-    xSynth = xSynth.cpu().detach().numpy()
-    xSynth = invert_min_max_scaler(xSynth, modelState['minMax'], FEATURE_RANGE)
-    xSynth = revert_reshape_arr(xSynth)
-    idx = modelState['dfIdx'][:modelState['dfIdx'].get_loc('#####0')]
-    xSynth = xSynth[:len(idx)]
-    xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
-    return xSynth
+    try:
+        with gzip.open(modelStatePath, 'rb') as file:
+            modelState = torch.load(file)
+        print(f"Successfully loaded model from {modelStatePath}")
+        
+        Gen = Generator(modelState['gen_layers'])
+        Gen.load_state_dict(modelState['gen_state_dict'])
+        noise = randn(modelState['profileCount'], modelState['dimNoise'], 1, 1, device = modelState['device'])
+        xSynth = Gen(noise)
+        xSynth = xSynth.cpu().detach().numpy()
+        xSynth = invert_min_max_scaler(xSynth, modelState['minMax'], FEATURE_RANGE)
+        xSynth = revert_reshape_arr(xSynth)
+        idx = modelState['dfIdx'][:modelState['dfIdx'].get_loc('#####0')]
+        xSynth = xSynth[:len(idx)]
+        xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
+        return xSynth
+    except Exception as e:
+        print(f"Error loading model from {modelStatePath}: {e}")
+        raise
 
 
 def export_synthetic_data(arr, outputPath, fileFormat, filename = 'example_synth_profiles'):
