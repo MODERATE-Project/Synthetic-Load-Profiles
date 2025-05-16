@@ -15,7 +15,7 @@ PROJECT_NAME = 'WGAN_final'
 
 # Input file path
 # INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
-INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
+INPUT_PATH = Path.cwd() / 'data' / "Fluvius_processed" / 'fluvius_wide_format.csv'
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
@@ -24,15 +24,15 @@ OUTPUT_FORMAT = '.npy'
 LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
-USE_WANDB = False
+USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 3500
+EPOCH_COUNT = 10_000
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 3500
-CHECK_FOR_MIN_STATS = 200  # after these epochs runs with lower Stats than minimum up to this point are plotted
-SAVE_MODELS = False
+SAVE_FREQ = 10000
+CHECK_FOR_MIN_STATS = 100  # after these epochs runs with lower Stats than minimum up to this point are plotted
+SAVE_MODELS = True
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
 
@@ -47,7 +47,7 @@ CREATE_DATA = False
 ####################################################################################################
 
 # Import labels for splitting dataframe
-df_label = pd.read_csv(Path.cwd() / 'data' / 'Labels_consumption_data.csv', sep = ';')
+df_label = pd.read_csv(Path.cwd() /  "data" / "Fluvius_processed" /'fluvius_indicators.csv', sep = ',')
 
 ####################################################################################################
 
@@ -67,8 +67,8 @@ if __name__ == '__main__':
     inputFile = inputFile.set_index(inputFile.columns[0])
     inputFile.index = pd.to_datetime(inputFile.index, format = 'mixed')
     # for cat in df_label['Category'].unique():
-    categories = ['EV_NoPV', 'NONE', 'EV+PV', 'Only_PV', 'PV+HP']
+    categories = ['EV', 'standard', 'PV', 'EV+PV', 'heat pump+PV']
     cat = categories[2] # 
-    IDs = [str(x) for x in df_label.loc[df_label['Category'] == cat, 'ID']]
-    df = inputFile.loc[:, IDs]
+    IDs = [str(x) for x in df_label.loc[df_label['label'] == cat, 'EAN_ID']]
+    df = inputFile.loc[:, IDs].copy()
     run(params, MODEL_TYPE, f"{PROJECT_NAME}_{cat}", df, LOG_STATS, USE_WANDB, MODEL_PATH, CREATE_DATA)

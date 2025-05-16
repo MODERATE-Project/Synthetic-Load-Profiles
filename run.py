@@ -11,11 +11,11 @@ MODEL_TYPE = 'WGAN'
 ####################################################################################################
 
 # Project name
-PROJECT_NAME = 'test'
+PROJECT_NAME = 'VITO_WGAN'
 
 # Input file path
-INPUT_PATH = Path.cwd() / 'data' / 'Consumption_data_hourly.csv'
-#INPUT_PATH = Path.cwd() / 'data' / 'Fluvius_data_hourly.csv'
+# INPUT_PATH = Path.cwd() / 'data' / "raw_data" / "enercoop" / "ENERCOOP_1year_filtered.csv"
+INPUT_PATH = Path.cwd() / "data" / "Fluvius_processed" /'fluvius_wide_format.csv'
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
@@ -27,11 +27,11 @@ LOG_STATS = True
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 1000
+EPOCH_COUNT = 3500
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 50
-SAVE_MODELS = False
+SAVE_FREQ = 5000
+SAVE_MODELS = True
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
 CHECK_FOR_MIN_STATS = 100   #after these epochs, runs with lower stats than the current minimum are plotted
