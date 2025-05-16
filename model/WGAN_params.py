@@ -5,7 +5,7 @@ import torch
 params = {
     'batchSize': 40,
     'device': torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu'),
-    'lambdaGP': 2,
+    'lambdaGP': 10,
     'lrGen': 1e-4/3.25,
     'lrDis': 1e-4/2.25,
     'betas': (0.5, 0.999),
