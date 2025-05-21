@@ -13,7 +13,7 @@ params = {
     'labelReal': 1,
     'labelFake': 0,
     'saveFreq': 1000,
-    'genLoopCount': 2,
+    'genLoopCount': 1,
     'saveModels': False,
     'savePlots': True,
     'saveSamples': False,
