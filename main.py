@@ -7,12 +7,13 @@ import gc
 from model.main import GAN, generate_data_from_saved_model, export_synthetic_data
 
 
-def run(params, modelType, projectName, inputFile, logStats, useWandb, modelPath, createData, useMarimo = False):
+def run(params, modelType, projectName, inputFile, logStats, useWandb, modelPath, createData, useMarimo = False, generate_n_profiles = None, train_data = None, holdout_data = None):
     if modelPath and createData:
         outputPath = Path(modelPath).parent.parent.parent / 'sample_data' / Path(modelPath).parent.name
         outputPath.mkdir(parents = True, exist_ok = True)
-        X_synth = generate_data_from_saved_model(modelPath)
-        export_synthetic_data(X_synth, outputPath, params['outputFormat'])
+        for i in range(4, 10):
+            X_synth = generate_data_from_saved_model(modelPath, n_profiles = generate_n_profiles)
+            export_synthetic_data(X_synth, outputPath, filename = f'{generate_n_profiles}_profiles_{i}', fileFormat = ".csv")
     else:
         wandb.init(
             project = 'GAN',
@@ -23,6 +24,10 @@ def run(params, modelType, projectName, inputFile, logStats, useWandb, modelPath
         runName = f'{modelName}_{runNameTSSuffix}' if len(modelName) > 0 else runNameTSSuffix
         outputPath = Path().absolute() / 'runs' / projectName / runName
         outputPath.mkdir(parents = True, exist_ok = True)
+        # Save the datasets
+        if train_data is not None and holdout_data is not None:
+            train_data.to_csv(outputPath / 'train_data.csv')
+            holdout_data.to_csv(outputPath / 'holdout_data.csv')
         model = GAN(
             dataset = inputFile,
             params = params,
