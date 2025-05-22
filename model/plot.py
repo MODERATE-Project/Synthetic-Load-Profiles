@@ -50,17 +50,66 @@ def plot_stat(arr_featureReal, arr_featureSynth, ax, title, descrFontSize = 7):
 
 
 def calc_features(arr, axis):
-    arr_features = np.array([
-        arr.mean(axis = axis),
-        arr.std(axis = axis),
-        arr.min(axis = axis),
-        arr.max(axis = axis),
-        np.median(arr, axis = axis),
-        skew(arr, axis = axis),
-        np.ptp(arr, axis = axis),
-        np.percentile(arr, 25, axis = axis),
-        np.percentile(arr, 75, axis = axis)
-    ])
+    """
+    Calculate statistical features of the input array along the specified axis.
+    Handles NaN values and edge cases safely.
+    """
+    # Safety check for NaN values in input
+    if np.isnan(arr).any():
+        print("Warning: NaN values detected in input array for feature calculation")
+        # Replace NaN values with 0 for calculation
+        arr = np.nan_to_num(arr, nan=0.0)
+    
+    # Initialize output array
+    arr_features = np.zeros((9, arr.shape[1] if axis == 0 else arr.shape[0]), dtype=np.float32)
+    
+    try:
+        # Calculate mean
+        arr_features[0] = np.mean(arr, axis=axis)
+        
+        # Calculate standard deviation
+        std = np.std(arr, axis=axis)
+        arr_features[1] = np.nan_to_num(std, nan=0.0)  # Replace NaN with 0
+        
+        # Calculate min and max
+        arr_features[2] = np.min(arr, axis=axis)
+        arr_features[3] = np.max(arr, axis=axis)
+        
+        # Calculate median
+        arr_features[4] = np.median(arr, axis=axis)
+        
+        # Calculate skewness with safety checks
+        try:
+            skewness = skew(arr, axis=axis)
+            # Replace NaN and inf values in skewness with 0
+            arr_features[5] = np.nan_to_num(skewness, nan=0.0, posinf=0.0, neginf=0.0)
+        except Exception as e:
+            print(f"Warning: Error calculating skewness: {e}")
+            arr_features[5] = 0.0
+        
+        # Calculate peak to peak range
+        arr_features[6] = np.ptp(arr, axis=axis)
+        
+        # Calculate quartiles
+        try:
+            arr_features[7] = np.percentile(arr, 25, axis=axis)
+            arr_features[8] = np.percentile(arr, 75, axis=axis)
+        except Exception as e:
+            print(f"Warning: Error calculating quartiles: {e}")
+            # If quartile calculation fails, use min and max as fallback
+            arr_features[7] = arr_features[2]  # Use min as lower quartile
+            arr_features[8] = arr_features[3]  # Use max as upper quartile
+    
+    except Exception as e:
+        print(f"Warning: Error in feature calculation: {e}")
+        # Return zeros if calculation fails
+        return np.zeros((9, arr.shape[1] if axis == 0 else arr.shape[0]), dtype=np.float32)
+    
+    # Final safety check for any remaining NaN values
+    if np.isnan(arr_features).any():
+        print("Warning: NaN values detected in calculated features")
+        arr_features = np.nan_to_num(arr_features, nan=0.0)
+    
     return arr_features
 
 
@@ -262,16 +311,31 @@ def histogram_similarity(arr_real, arr_synth, bins = 50):
 def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal):
     arr_synth = arr_synth[:, 1:].astype(np.float32)
     
+    # Safety check for NaN values in input arrays
+    if np.isnan(arr_real).any() or np.isnan(arr_synth).any():
+        print("Warning: NaN values detected in input arrays")
+        return 1.0  # Return worst case value
+    
     # Calculate all metrics
     histSimilarity = histogram_similarity(arr_real, arr_synth)
+    if np.isnan(histSimilarity):
+        print("Warning: NaN value in histogram similarity")
+        return 1.0
+    
     # Feature normalization for profile features
     arr_featuresSynth = calc_features(arr_synth, axis=0)
+    
     # Store reference values if this is the first run
     if not all(hasattr(composite_metric, attr) for attr in ['feature_means', 'feature_stds_inverted']):
         # Calculate mean and std for each feature type (mean, std, min, max, etc.)
         feature_means = np.mean(arr_featuresReal, axis=1, keepdims=True)  # Shape: (9, 1)
-        feature_stds_inverted = 1 / np.std(arr_featuresReal, axis=1, keepdims=True)    # Shape: (9, 1)
-        feature_stds_inverted[np.isinf(feature_stds_inverted)] = 1
+        feature_stds = np.std(arr_featuresReal, axis=1, keepdims=True)    # Shape: (9, 1)
+        
+        # Handle zero standard deviations
+        feature_stds_inverted = np.zeros_like(feature_stds)
+        mask = feature_stds != 0
+        feature_stds_inverted[mask] = 1 / feature_stds[mask]
+        feature_stds_inverted[~mask] = 1  # Use 1 for zero std cases
         
         # Store normalization parameters
         composite_metric.feature_means = feature_means
@@ -279,6 +343,11 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
         
     # Z-score normalize each feature using reference statistics
     normalized_synth_features = (arr_featuresSynth - composite_metric.feature_means) * composite_metric.feature_stds_inverted
+    
+    # Check for NaN values after normalization
+    if np.isnan(normalized_synth_features).any():
+        print("Warning: NaN values detected after feature normalization")
+        return 1.0
      
     synth_feature_stats = np.concatenate([
         np.mean(normalized_synth_features, axis=1),  # Mean of each feature
@@ -287,7 +356,11 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
 
     real_feature_stats = np.ones(shape=synth_feature_stats.shape)
     # MSE between real and synthetic feature statistics (all equally weighted)
-    profileFeaturesDistance = np.mean((real_feature_stats - synth_feature_stats)**2)   
+    profileFeaturesDistance = np.mean((real_feature_stats - synth_feature_stats)**2)
+    
+    if np.isnan(profileFeaturesDistance):
+        print("Warning: NaN value in profile features distance")
+        return 1.0
     
     # Normalize using reference values from initial run
     reference_values = {
@@ -300,12 +373,26 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
         composite_metric.ref_hist_similarity = histSimilarity
         composite_metric.ref_profile_features = profileFeaturesDistance
     
-    # Normalize each metric by its reference value
-    histSimilarityNorm = histSimilarity/reference_values['hist_similarity']
-    profileFeaturesDistanceNorm = profileFeaturesDistance/reference_values['profile_features_distance']
+    # Handle zero reference values
+    if reference_values['hist_similarity'] == 0:
+        histSimilarityNorm = 1.0
+    else:
+        histSimilarityNorm = histSimilarity/reference_values['hist_similarity']
+        
+    if reference_values['profile_features_distance'] == 0:
+        profileFeaturesDistanceNorm = 1.0
+    else:
+        profileFeaturesDistanceNorm = profileFeaturesDistance/reference_values['profile_features_distance']
     
     # Combine with appropriate weights
-    return 0.5*histSimilarityNorm + 0.5*profileFeaturesDistanceNorm
+    final_metric = 0.5*histSimilarityNorm + 0.5*profileFeaturesDistanceNorm
+    
+    # Final safety check
+    if np.isnan(final_metric):
+        print("Warning: NaN value in final metric")
+        return 1.0
+        
+    return final_metric
 
 ########################################################################################################################
 
