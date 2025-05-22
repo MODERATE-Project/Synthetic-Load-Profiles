@@ -15,15 +15,15 @@ params = {
     'labelFake': 0,
     'saveFreq': 1000,
     'genLoopCount': 1,
-    'saveModels': False,
+    'saveModels': True,
     'savePlots': True,
-    'saveSamples': False,
+    'saveSamples': True,
     'checkForMinStats': 100,
     'dimNoise': 128,
     'dimHidden': 16,
     'channelCount': 1,
     'outputFormat': '.npy',
     'dropoutOffEpoch': 1000,
-    'dropout': 0.2
+    'dropout': 0.1
 }
 

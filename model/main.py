@@ -540,7 +540,7 @@ class GAN(nn.Module):
             print(f"Error deleting previous model: {e}")
 
 
-def generate_data_from_saved_model(modelStatePath):
+def generate_data_from_saved_model(modelStatePath, n_profiles=None):
     try:
         with gzip.open(modelStatePath, 'rb') as file:
             modelState = torch.load(file)
@@ -548,9 +548,32 @@ def generate_data_from_saved_model(modelStatePath):
         
         Gen = Generator(modelState['gen_layers'])
         Gen.load_state_dict(modelState['gen_state_dict'])
-        noise = randn(modelState['profileCount'], modelState['dimNoise'], 1, 1, device = modelState['device'])
-        xSynth = Gen(noise)
-        xSynth = xSynth.cpu().detach().numpy()
+        
+        # Use n_profiles if specified, otherwise use the original profileCount
+        profile_count = n_profiles if n_profiles is not None else modelState['profileCount']
+        
+        # Generate data in smaller batches to save memory
+        batch_size = 32  # Adjust this based on your available memory
+        num_batches = (profile_count + batch_size - 1) // batch_size
+        xSynth_list = []
+        
+        with torch.no_grad():  # No need to track gradients during generation
+            for i in range(num_batches):
+                start_idx = i * batch_size
+                end_idx = min((i + 1) * batch_size, profile_count)
+                current_batch_size = end_idx - start_idx
+                
+                noise = randn(current_batch_size, modelState['dimNoise'], 1, 1, device = modelState['device'])
+                xSynth_batch = Gen(noise)
+                xSynth_batch = xSynth_batch.cpu().numpy()  # Move to CPU immediately
+                xSynth_list.append(xSynth_batch)
+                
+                # Free memory
+                if modelState['device'].type == 'cuda':
+                    torch.cuda.empty_cache()
+        
+        # Combine batches
+        xSynth = np.vstack(xSynth_list)
         xSynth = invert_min_max_scaler(xSynth, modelState['minMax'], FEATURE_RANGE)
         xSynth = revert_reshape_arr(xSynth)
         idx = modelState['dfIdx'][:modelState['dfIdx'].get_loc('#####0')]
@@ -562,7 +585,7 @@ def generate_data_from_saved_model(modelStatePath):
         raise
 
 
-def export_synthetic_data(arr, outputPath, fileFormat, filename = 'example_synth_profiles'):
+def export_synthetic_data(arr, outputPath, filename = 'example_synth_profiles', fileFormat = ".csv"):
     filePath = outputPath / f'{filename}{fileFormat}'
     fileNewIdx = 2
     while filePath.is_file():
