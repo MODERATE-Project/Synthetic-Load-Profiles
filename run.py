@@ -73,4 +73,12 @@ if __name__ == '__main__':
 
     train_data, test_data = split_data_train_test(filtered_inputFile, train_ratio=0.8, random_state=42)
     
-    run(params, MODEL_TYPE, PROJECT_NAME, train_data=train_data, LOG_STATS=LOG_STATS, USE_WANDB=USE_WANDB, MODEL_PATH=MODEL_PATH, CREATE_DATA=CREATE_DATA, generate_n_profiles = 100, test_data=test_data)
+    run(params, MODEL_TYPE, PROJECT_NAME, 
+        train_data=train_data, 
+        LOG_STATS=LOG_STATS, 
+        USE_WANDB=USE_WANDB, 
+        MODEL_PATH=MODEL_PATH, 
+        CREATE_DATA=CREATE_DATA, 
+        generate_n_profiles = 100, 
+        test_data=test_data)
+    
