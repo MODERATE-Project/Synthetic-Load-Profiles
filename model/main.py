@@ -13,7 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 import copy
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
-from model.plot import calc_features, compute_trends, create_plots, create_html, composite_metric, plot_stats_progress
+from model.plot import create_plots, create_html, plot_stats_progress
+from model.utils import compute_trends, calc_features, composite_metric
 
 
 DAY_COUNT = 368
