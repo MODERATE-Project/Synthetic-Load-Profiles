@@ -23,5 +23,4 @@ params = {
     'channelCount': 1,
     'outputFormat': '.npy',
     'dropoutOffEpoch': 100,
-    'dropout': 0.08
 }

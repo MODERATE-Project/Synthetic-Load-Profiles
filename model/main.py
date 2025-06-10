@@ -11,6 +11,7 @@ from contextlib import nullcontext
 import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor
 import copy
+import pathlib
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
 from model.plot import create_plots, create_html, plot_stats_progress
@@ -98,13 +99,13 @@ class GAN(nn.Module):
 
         # Create output directories
         self.logPath = self.outputPath / 'logs'
-        os.makedirs(self.logPath)
+        pathlib.Path(self.logPath).mkdir(parents=True, exist_ok=True)
         self.modelPath = self.outputPath / 'models'
-        os.makedirs(self.modelPath)
+        pathlib.Path(self.modelPath).mkdir(parents=True, exist_ok=True)
         self.plotPath = self.outputPath / 'plots'
-        os.makedirs(self.plotPath)
+        pathlib.Path(self.plotPath).mkdir(parents=True, exist_ok=True)
         self.samplePath = self.outputPath / 'sample_data'
-        os.makedirs(self.samplePath)
+        pathlib.Path(self.samplePath).mkdir(parents=True, exist_ok=True)
 
         # Continue training existing model
         if self.modelStatePath:

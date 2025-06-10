@@ -8,7 +8,6 @@ from model.WGAN_params import params
 DIM_NOISE = params['dimNoise']
 DIM_HIDDEN = params['dimHidden']
 CHANNEL_COUNT = params['channelCount']
-P_DROPOUT = params['dropout']
 
 layersGen = nn.Sequential(OrderedDict([
     ('1', nn.Sequential(
