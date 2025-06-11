@@ -14,10 +14,10 @@ MODEL_TYPE = 'WGAN'
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
 # Project name
-PROJECT_NAME = 'project_1'
+PROJECT_NAME = 'WGAN_final_all'
 
 # Input file path
-INPUT_PATH = Path.cwd() / 'data' / ...
+INPUT_PATH = Path.cwd() / 'data' / "sample_data" / "opendata_fluvius" / "fluvius_wide_format.csv"
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
@@ -26,7 +26,7 @@ OUTPUT_FORMAT = '.npy'
 LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
-USE_WANDB = False
+USE_WANDB = True
 
 # Set the number of epochs
 EPOCH_COUNT = 5_000
@@ -69,16 +69,17 @@ if __name__ == '__main__':
         print("Warning: NaN values detected in input file")
         exit()
     # Filter out profiles with maximum values within 95th percentile
-    filtered_inputFile = filter_profiles_with_extreme_peaks(inputFile)
+    # inputFile = filter_profiles_with_extreme_peaks(inputFile)
 
-    train_data, test_data = split_data_train_test(filtered_inputFile, train_ratio=0.8, random_state=42)
+    train_data, test_data = split_data_train_test(inputFile, train_ratio=0.8, random_state=42)
     
     run(params, MODEL_TYPE, PROJECT_NAME, 
         train_data=train_data, 
-        LOG_STATS=LOG_STATS, 
-        USE_WANDB=USE_WANDB, 
-        MODEL_PATH=MODEL_PATH, 
-        CREATE_DATA=CREATE_DATA, 
+        logStats=LOG_STATS, 
+        useWandb=USE_WANDB, 
+        modelPath=MODEL_PATH, 
+        createData=CREATE_DATA, 
+        useMarimo=False,
         generate_n_profiles = 100, 
         test_data=test_data)
     

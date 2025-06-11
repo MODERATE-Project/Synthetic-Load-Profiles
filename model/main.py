@@ -161,10 +161,11 @@ class GAN(nn.Module):
             gradDis_dict, gradGen_dict = {}, {}
 
             # Deactivate dropout layers in generator
-            if epoch == self.dropoutOffEpoch:
-                for module in self.Gen.modules():
-                    if isinstance(module, nn.Dropout2d):
-                        module.p = 0
+            if self.modelType == 'GAN':
+                if epoch == self.dropoutOffEpoch:
+                    for module in self.Gen.modules():
+                        if isinstance(module, nn.Dropout2d):
+                            module.p = 0
             
             # Batch loop
             for batchIdx, data in enumerate(self.dataLoader):
