@@ -109,8 +109,7 @@ class GAN(nn.Module):
 
         # Continue training existing model
         if self.modelStatePath:
-            with gzip.open(self.modelStatePath, 'rb') as file:
-                self.modelState = torch.load(file, weights_only = False)
+            self.modelState = torch.load(self.modelStatePath, weights_only = False)
             if not (self.dfIdx == self.modelState['dfIdx']).all():
                 raise ValueError('Timestamps do not match!')
             print('Successfully imported existing model!')
@@ -425,8 +424,7 @@ class GAN(nn.Module):
             'continued_from': self.modelStatePath,
             'feature_range': FEATURE_RANGE
         } | self.params
-        with gzip.open(path / f'epoch_{epoch + 1}.pt', 'wb') as file:
-            torch.save(model, file)
+        torch.save(model, path / f'epoch_{epoch + 1}.pt')
 
     def save_model_state_background(self, epoch, path):
         """Save model state in a background process to avoid interrupting training."""
@@ -460,8 +458,7 @@ class GAN(nn.Module):
     def _save_model_to_file(self, model, filepath):
         """Helper function to save model to file from a background thread."""
         try:
-            with gzip.open(filepath, 'wb') as file:
-                torch.save(model, file)
+            torch.save(model, filepath)
             print(f"Successfully saved model to {filepath}")
         except Exception as e:
             print(f"Error saving model to {filepath}: {e}")
@@ -548,8 +545,7 @@ class GAN(nn.Module):
 
 def generate_data_from_saved_model(modelStatePath, n_profiles=None):
     try:
-        with gzip.open(modelStatePath, 'rb') as file:
-            modelState = torch.load(file)
+        modelState = torch.load(modelStatePath, weights_only = False)
         print(f"Successfully loaded model from {modelStatePath}")
         
         Gen = Generator(modelState['gen_layers'])
