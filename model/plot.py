@@ -211,8 +211,9 @@ def plot_cdf(train_data, test_data, synthetic_data, save_path=None):
     
     plt.xlabel('electricity consumption (kWh/h)')
     plt.ylabel('Cumulative Probability')
-    plt.legend()
-    plt.xlim(0, 2.5)  # Zoom in on x-axis
+    plt.legend(loc='lower right')
+    plt.xlim(0, 2.5)
+    plt.ylim(0, 1)
     
     plt.tight_layout()
     return fig
