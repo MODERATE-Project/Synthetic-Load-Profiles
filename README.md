@@ -15,7 +15,7 @@ The recommended Python version for running this code is 3.11.
 1) Clone the repository to your local machine:
 
 ```sh
-git clone https://github.com/MODERATE-Project/GAN.git
+git clone https://github.com/MODERATE-Project/Synthetic-Load-Profiles.git
 ```
 
 2) Navigate to the project directory:
