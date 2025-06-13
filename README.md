@@ -95,20 +95,20 @@ Settings have to be adjusted directly in the script and file paths have to be pr
 
 The following (hyper)parameters can be adjusted:
 
-* <ins>model type</ins>: Lets you choose between an ordinary GAN and a WGAN-GP model.
+* <ins>model type</ins>: Lets you choose between an ordinary GAN and a WGAN model. The WGAN is usually more stable in training but for some usecases the GAN might be more suitable.
 * <ins>output format</ins>: Lets you choose between three possible file formats for the synthetic data: ".npy", ".csv" and ".xlsx".
-* <ins>log metric</ins>: Whether or not to log a composite metric for checking the quality of the results in every epoch.
+* <ins>log metric</ins>: Whether or not to log a composite metric for checking the quality of the results in every epoch. If the log metric is enabled, plot, models and samples are saved for the best performing epoch within the training.
 * <ins>use Wandb</ins>: Whether or not to track certain parameters online.
 * <ins>epochCount/Number of epochs</ins>: Amount of epochs for training.
-* <ins>save frequency</ins>: Defines the frequency of epochs at which results should be saved.
-* <ins>save models</ins>: Whether or not to save models at the specified frequency.
-* <ins>save plots</ins>: Whether or not to save plots at the specified frequency.
-* <ins>save samples</ins>: Whether or not to save samples at the specified frequency.
-* <ins>check for min stats</ins>: Epoch after which the model checks whether the composite metric improves before deciding whether to plot the results.
+* <ins>save frequency</ins>: Defines the frequency of epochs at which results should be saved. If the save frequency is higher than the epochCount, plots, models and synthetic data samples are only saved if the log metric is enabled for the best performing epoch.
+* <ins>save models</ins>: Whether or not to save models at the specified frequency or for best performing epoch if log metric is set to true.
+* <ins>save plots</ins>: Whether or not to save plots at the specified frequency or for best performing epoch if log metric is set to true.
+* <ins>save samples</ins>: Whether or not to save samples at the specified frequency or for best performing epoch if log metric is set to true.
+* <ins>check for min stats</ins>: Epoch after which the model starts checking whether the composite metric improves before deciding whether to plot and save the model state and results. If set to 0 every epoch is checked for better results which might slow down the training process in the first couple of epochs as the model improves almost every epoch in the beginning.
 * <ins>batch size</ins>: The batch size (number of training examples processed together in one forward and backward pass) used for training.
 * <ins>device</ins>: Lets you choose between CPU and GPUs for creating and training a model. Leave the default value to enable automatic GPU detection.
 * <ins>loss function</ins>: Loss function used for the generator and the discriminator in the ordinary GAN. By default, the binary cross entropy loss function (BCELoss) is used. If another loss function is chosen, additional adaptions to the code might be needed.
 * <ins>lrGen/lrDis</ins>: Define the learning rates of the generator and the discriminator.
 * <ins>betas</ins>: By default, AdamOptimizor is used in both the Generator and Discriminator. The beta values define the moving averages.
 * <ins>genLoopCount</ins>: When a model is trained, in the beginning, the discriminator might outperform the generator, leading to no training effect. The generator can be trained multiple times per iteration, defined by this variable.
-* <ins>dropoutOffEpoch</ins>: Defines the epoch after which all dropout layers in the generator are deactivated (might imporve the results).
+* <ins>dropoutOffEpoch</ins>: Defines the epoch after which all dropout layers in the generator are deactivated (might imporve the results). This is only valid for the GAN.
