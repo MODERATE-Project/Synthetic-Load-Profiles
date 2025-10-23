@@ -505,6 +505,7 @@ class GAN(nn.Module):
         # Generate data in smaller batches to save memory
         num_batches = (self.dataset.shape[0] + self.params["batchSize"] - 1) // self.params["batchSize"]
         xSynth_list = []
+        self.Gen.eval()
         with torch.no_grad():  # No need to track gradients during generation
             for i in range(num_batches):
                 start_idx = i * self.params["batchSize"]
@@ -527,6 +528,7 @@ class GAN(nn.Module):
         idx = self.dfIdx[:self.dfIdx.get_loc('#####0')]
         xSynth = xSynth[:len(idx)]
         xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
+        self.Gen.train()
         return xSynth
 
     def _delete_previous_model(self, model_path):
@@ -550,6 +552,7 @@ def generate_data_from_saved_model(modelStatePath, n_profiles=None):
         
         Gen = Generator(modelState['gen_layers'])
         Gen.load_state_dict(modelState['gen_state_dict'])
+        Gen.eval()
         
         # Use n_profiles if specified, otherwise use the original profileCount
         profile_count = n_profiles if n_profiles is not None else modelState['profileCount']
