@@ -20,5 +20,6 @@ wandb/
 *.xml
 *.xlsx
 *.zip
+*.pkl
 
 !readme/Example_CSV_structure.png

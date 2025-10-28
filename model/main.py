@@ -12,6 +12,7 @@ import multiprocessing as mp
 from concurrent.futures import ThreadPoolExecutor
 import copy
 import pathlib
+import pyarrow.parquet as pq
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
 from model.plot import create_plots, create_html, plot_stats_progress
@@ -547,6 +548,9 @@ class GAN(nn.Module):
 
 def generate_data_from_saved_model(modelStatePath, n_profiles=None):
     try:
+        # import gzip
+        # with gzip.open(modelStatePath, 'rb') as f:
+        #     modelState = torch.load(f, weights_only = False)
         modelState = torch.load(modelStatePath, weights_only = False)
         print(f"Successfully loaded model from {modelStatePath}")
         
@@ -603,3 +607,6 @@ def export_synthetic_data(arr, outputPath, filename = 'example_synth_profiles', 
             pd.DataFrame(arr).set_index(0).astype(np.float32).to_csv(filePath)
         case '.xlsx':
             pd.DataFrame(arr).set_index(0).astype(np.float32).to_excel(filePath)
+        case '.parquet':
+            pd.DataFrame(arr).set_index(0).astype(np.float32).to_parquet(filePath)
+    print(f"Successfully exported synthetic data to {filePath}")

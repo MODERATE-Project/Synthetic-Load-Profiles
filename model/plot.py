@@ -74,12 +74,7 @@ def plot_stats(arr_featuresReal, arr_featuresSynth, arr_featuresThird=None):
             plot_stat(arr_featuresReal[idx], arr_featuresSynth[idx], ax, features[idx], arr_featuresThird[idx])
         else:
             plot_stat(arr_featuresReal[idx], arr_featuresSynth[idx], ax, features[idx])
-    
-    # Update title based on number of datasets
-    if arr_featuresThird is not None:
-        plt.suptitle('Three-way Comparison of...', ha = 'center', fontsize = 16, fontweight = 'bold')
-    else:
-        plt.suptitle('Comparison of...', ha = 'center', fontsize = 16, fontweight = 'bold')
+    plt.suptitle('Comparison of...', ha = 'center', fontsize = 16, fontweight = 'bold')
     plt.tight_layout()
     return fig
 

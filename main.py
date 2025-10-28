@@ -9,11 +9,12 @@ from model.main import GAN, generate_data_from_saved_model, export_synthetic_dat
 def run(params, modelType, projectName, train_data, logStats, useWandb, modelPath, createData, useMarimo = False, 
         generate_n_profiles = None, test_data = None):
     if modelPath and createData:
-        outputPath = Path(modelPath).parent.parent.parent / 'sample_data' / Path(modelPath).parent.name
-        outputPath.mkdir(parents = True, exist_ok = True)
-        for i in range(4, 10):
-            X_synth = generate_data_from_saved_model(modelPath, n_profiles = generate_n_profiles)
-            export_synthetic_data(X_synth, outputPath, filename = f'{generate_n_profiles}_profiles_{i}', fileFormat = ".csv")
+        for path in modelPath:
+            outputPath = Path(path).parent.parent.parent.parent.parent.parent.parent / "HVAC_identification" / "input_data"
+            name = Path(path).parent.parent.parent.parent.name.replace("WGAN_final_", "").replace("standard", "None").replace("heat pump", "heat_pump")
+            outputPath.mkdir(parents = True, exist_ok = True)
+            X_synth = generate_data_from_saved_model(path, n_profiles = generate_n_profiles)
+            export_synthetic_data(X_synth, outputPath, filename = f'{generate_n_profiles}_profiles_{name}', fileFormat = ".parquet")
     else:
         wandb.init(
             project = 'GAN',

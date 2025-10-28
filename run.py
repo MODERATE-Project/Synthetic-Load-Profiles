@@ -41,10 +41,19 @@ CHECK_FOR_MIN_STATS = 10   #after these epochs, runs with lower stats than the c
 ####################################################################################################
 
 # Model state path (optional, for continuation of training or generation of data)
-MODEL_PATH = None #Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/GAN/runs/Enercoop_WGAN_80_20/lucky-wood-392_2025-05-21-111356060/models/epoch_95") / "epoch_95.pt"
+MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt"
+
+create_data_paths = [
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/gentle-wave-384_2025-05-17-101257896/models/epoch_700") / "epoch_700.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_1240") / "epoch_1240.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_8906") / "epoch_8906.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_328") / "epoch_328.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt",
+
+]
 
 # Create synthetic data from existing model (if True, there is no training)
-CREATE_DATA = False
+CREATE_DATA = True
 
 # ==========================================================================================
 #                                        MAIN SCRIPT
@@ -73,13 +82,14 @@ if __name__ == '__main__':
 
     train_data, test_data = split_data_train_test(inputFile, train_ratio=0.8, random_state=42)
     
+    # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
     run(params, MODEL_TYPE, PROJECT_NAME, 
         train_data=train_data, 
         logStats=LOG_STATS, 
         useWandb=USE_WANDB, 
-        modelPath=MODEL_PATH, 
+        modelPath=[MODEL_PATH], 
         createData=CREATE_DATA, 
         useMarimo=False,
-        generate_n_profiles = 100, 
+        generate_n_profiles = 10_000, 
         test_data=test_data)
     
