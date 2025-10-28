@@ -1,0 +1,3 @@
+[submodule "third_party/doppelganger"]
+	path = third_party/doppelganger
+	url = https://github.com/fjxmlzn/DoppelGANger.git
