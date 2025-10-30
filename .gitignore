@@ -21,5 +21,6 @@ wandb/
 *.xlsx
 *.zip
 *.pkl
+*.parquet
 
 !readme/Example_CSV_structure.png
