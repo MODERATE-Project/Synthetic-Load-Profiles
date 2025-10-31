@@ -20,12 +20,12 @@ from model.utils import (
     compute_trends,
     calc_features,
     composite_metric,
-    load_reference_profiles,
     ensure_numeric_profiles,
     flag_profiles_by_similarity,
     filter_pool_by_similarity,
     build_feature_dataframe,
     match_best_replacement,
+    calculate_cosine_similarity_threshold,
 )
 
 
@@ -558,12 +558,10 @@ class GAN(nn.Module):
 
 def generate_data_from_saved_model(
     modelStatePath,
-    n_profiles=None,
-    real_profiles: pd.DataFrame | None = None,
-    similarity_threshold: float = 0.85,
+    n_profiles: int,
+    train_data: pd.DataFrame,
+    test_data: pd.DataFrame,
     max_pool_attempts: int = 5,
-    train_data: pd.DataFrame = None,
-    test_data: pd.DataFrame = None,
 ):
     try:
         modelStatePath = pathlib.Path(modelStatePath)
@@ -619,23 +617,17 @@ def generate_data_from_saved_model(
 
 
         synthetic_df = _generate_synthetic_dataframe(profile_count)
-        if synthetic_df.shape[1] == 0:
-            raise ValueError("No synthetic profiles were generated.")
+        similarity_threshold = calculate_cosine_similarity_threshold(train_data, test_data)
 
         flagged_cols, _ = flag_profiles_by_similarity(train_data, synthetic_df, similarity_threshold)
         flagged_to_replace = list(flagged_cols)
-
         replacement_map: list[tuple[str, str]] = []
-        if flagged_cols:
-            print(f"Flagging {len(flagged_cols)} synthetic profiles due to similarity > {similarity_threshold}.")
-        else:
-            print("No synthetic profiles exceeded the similarity threshold.")
 
         pool_frames: list[pd.DataFrame] = []
         attempts = 0
         while flagged_to_replace and sum(df.shape[1] for df in pool_frames) < len(flagged_to_replace) and attempts < max_pool_attempts:
             pool_candidate = _generate_synthetic_dataframe(profile_count)
-            cleaned_pool = filter_pool_by_similarity(real_df, pool_candidate, similarity_threshold)
+            cleaned_pool = filter_pool_by_similarity(train_data, pool_candidate, similarity_threshold)
             if cleaned_pool.shape[1] > 0:
                 pool_frames.append(cleaned_pool)
             attempts += 1
@@ -657,7 +649,7 @@ def generate_data_from_saved_model(
             unreplaced_flagged = flagged_to_replace[pool_df.shape[1]:]
             flagged_to_replace = flagged_to_replace[: pool_df.shape[1]]
 
-        final_df = synthetic_df.drop(columns = flagged_to_replace, errors = 'ignore')
+        final_df = synthetic_df.drop(columns = flagged_to_replace, errors = 'ignore').copy()
         pool_feature_df = build_feature_dataframe(pool_df, feature_labels)
         pool_feature_df_full = pool_feature_df.copy()
 
@@ -683,13 +675,11 @@ def generate_data_from_saved_model(
             pool_features = np.empty((len(feature_labels), 0), dtype=np.float32)
 
         return {
-            'data': final_array,
+            'synthetic_data': final_array,
             'final_features': final_features,
             'pool_features': pool_features,
-            'final_columns': column_order,
-            'pool_columns': list(pool_feature_df_full.columns),
-            'flagged_profiles': flagged_cols,
-            'unreplaced_flagged': unreplaced_flagged,
+            'replaced_synthetic_data': synthetic_df[flagged_to_replace],
+            'replacement_synthetic_data': final_df[flagged_to_replace],
             'replacement_map': replacement_map,
         }
     except Exception as e:

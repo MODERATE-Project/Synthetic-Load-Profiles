@@ -5,6 +5,8 @@ import pandas as pd
 from pathlib import Path
 from typing import Tuple, List, Any
 
+from torch.nn import Threshold
+
 
 
 def histogram_similarity(arr_real, arr_synth, bins = 50):
@@ -414,6 +416,11 @@ def ensure_numeric_profiles(df: pd.DataFrame, label: str) -> pd.DataFrame:
     return numeric_df.astype(np.float32)
 
 
+def calculate_cosine_similarity_threshold(real_profiles: pd.DataFrame, synthetic_profiles: pd.DataFrame) -> float:
+    similarity_matrix, _, _ = compute_cosine_similarity_matrix(real_profiles, synthetic_profiles)
+    threshold = similarity_matrix.max()
+    print(f"maximum cosine similarity between training and test data is {threshold}")
+    return threshold
 
 def flag_profiles_by_similarity(
     real_profiles: pd.DataFrame,
@@ -506,3 +513,5 @@ def identify_sensitive_profiles(
         )
 
     return flagged_ids, detail_df
+
+    

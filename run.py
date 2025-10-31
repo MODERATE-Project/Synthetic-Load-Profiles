@@ -29,7 +29,7 @@ LOG_STATS = True
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 5_000
+EPOCH_COUNT = 7_000
 
 # Change the result save frequency; save all samples/models in addition to visualizations
 SAVE_FREQ = 50000000
@@ -41,14 +41,14 @@ CHECK_FOR_MIN_STATS = 10   #after these epochs, runs with lower stats than the c
 ####################################################################################################
 
 # Model state path (optional, for continuation of training or generation of data)
-MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt"
+MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_all/fearsome-omen-403_2025-10-31-135650489/models/epoch_") / "epoch_.pt"
 
 create_data_paths = [
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/gentle-wave-384_2025-05-17-101257896/models/epoch_700") / "epoch_700.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_1240") / "epoch_1240.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_8906") / "epoch_8906.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_328") / "epoch_328.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/gentle-wave-384_2025-05-17-101257896/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_") / "epoch_.pt",
 
 ]
 
@@ -74,22 +74,24 @@ if __name__ == '__main__':
     inputFile = pd.read_csv(INPUT_PATH, sep = get_sep(INPUT_PATH))
     inputFile = inputFile.set_index(inputFile.columns[0])
     inputFile.index = pd.to_datetime(inputFile.index, format = 'mixed')
+
+    labels_file = pd.read_csv(Path.cwd() / 'data' / "sample_data" / "opendata_fluvius" / "fluvius_indicators.csv")
     if np.isnan(inputFile).any().any():
         print("Warning: NaN values detected in input file")
         exit()
     # Filter out profiles with maximum values within 95th percentile
     # inputFile = filter_profiles_with_extreme_peaks(inputFile)
 
-    train_data, test_data = split_data_train_test(inputFile, train_ratio=0.8, random_state=42)
+    train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
     
     # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
     run(params, MODEL_TYPE, PROJECT_NAME, 
         train_data=train_data, 
         logStats=LOG_STATS, 
         useWandb=USE_WANDB, 
-        modelPath=[MODEL_PATH], 
+        modelPath=None, 
         createData=CREATE_DATA, 
         useMarimo=False,
-        generate_n_profiles = 10_000, 
+        generate_n_profiles = 1300, 
         test_data=test_data)
     

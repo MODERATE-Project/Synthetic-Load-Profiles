@@ -1,12 +1,15 @@
 import matplotlib
+from pyarrow.fs import finalize_s3
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import pandas as pd
 from pathlib import Path
 import re
 import json
-from model.utils import compute_trends, calc_features, composite_metric
+from model.utils import compute_trends, calc_features, composite_metric, compute_cosine_similarity_matrix
+from model.plots import plot_similarity_boxplot
 
 
 features = ['means', 'standard deviations', 'minima', 'maxima', 'medians', 'skews', 'peak to peak ranges', 'lower quartiles', 'upper quartiles']
@@ -157,6 +160,35 @@ def create_plots(arr_real, arr_featuresReal, arr_dt, trendReal_dict, arr_synth, 
 
 ############################################################################################
 
+def plot_similarity_scores(
+    train_data: pd.DataFrame,
+    test_data: pd.DataFrame,
+    synthetic_before: pd.DataFrame,
+    synthetic_after: pd.DataFrame,
+    output_path: Path,
+    filename: str = "cosine_similarity_boxplot.png",
+):
+    """
+    Compute and visualise cosine similarity distributions for publication-ready reporting.
+    """
+    if any(df is None for df in (train_data, test_data, synthetic_before, synthetic_after)):
+        raise ValueError("All datasets must be provided to plot similarity scores.")
+
+    similarity_map = {
+        "Train vs Test": compute_cosine_similarity_matrix(train_data, test_data)[0],
+        "Synthetic vs Test (pre-swap)": compute_cosine_similarity_matrix(synthetic_before, test_data)[0],
+        "Synthetic vs Test (post-swap)": compute_cosine_similarity_matrix(synthetic_after, test_data)[0],
+    }
+
+    fig = plot_similarity_boxplot(similarity_map)
+    output_path.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path / filename, bbox_inches="tight", dpi=300)
+    plt.close(fig)
+    return fig
+
+
+############################################################################################
+
 def plot_stats_progress(epochs, stats_list, outputPath = None):
     """
     Plot the progress of the combined statistics metric over epochs.
@@ -259,6 +291,14 @@ def plot_wasserstein_by_size(wasserstein_distances: dict):
     plt.ylabel('Wasserstein Distance')
     plt.tight_layout()
     return fig
+
+def plot_synthetic_data_report(synthetic_data_dict, train_data, test_data, outputPath):
+  final_synthetic_data = synthetic_data_dict['synthetic_data']
+  replaced_synthetic_data = synthetic_data_dict['replaced_synthetic_data']
+  replacement_data = synthetic_data_dict['replacement_synthetic_data']
+
+
+  pass
     
 ########################################################################################################################
 

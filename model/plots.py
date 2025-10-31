@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import pandas as pd
 import os
 
 
@@ -76,3 +77,56 @@ def model_plot_wrapper(X_real, X_synth, plotPath):
     plot_peaks(X_real, X_synth, plotPath)
     plot_means(X_real, X_synth, plotPath)
     plot_mean_profiles(X_synth, plotPath)
+
+
+def plot_similarity_boxplot(similarity_map: dict[str, np.ndarray]) -> plt.Figure:
+    """
+    Create a publication-ready boxplot comparing cosine similarity distributions.
+    """
+    if not similarity_map:
+        raise ValueError("No similarity data provided for plotting.")
+
+    records = []
+    for label, values in similarity_map.items():
+        if values is None:
+            continue
+        arr = np.asarray(values, dtype=np.float64).ravel()
+        arr = arr[~np.isnan(arr)]
+        if arr.size == 0:
+            continue
+        records.append(pd.DataFrame({"Dataset": label, "Similarity": arr}))
+
+    if not records:
+        raise ValueError("Similarity arrays were empty after removing NaNs.")
+
+    df = pd.concat(records, ignore_index=True)
+
+    with plt.style.context("seaborn-whitegrid"):
+        fig, ax = plt.subplots(figsize=(8, 6))
+        palette = sns.color_palette("colorblind", df["Dataset"].nunique())
+
+        sns.boxplot(
+            data=df,
+            x="Dataset",
+            y="Similarity",
+            ax=ax,
+            palette=palette,
+            width=0.6,
+            showcaps=True,
+            boxprops={"linewidth": 1.5},
+            medianprops={"linewidth": 2, "color": "black"},
+            whiskerprops={"linewidth": 1.5},
+            capprops={"linewidth": 1.5},
+            fliersize=2,
+        )
+
+        ax.set_title("Cosine Similarity Distributions", fontsize=14, fontweight="bold")
+        ax.set_xlabel("")
+        ax.set_ylabel("Cosine similarity", fontsize=12, fontweight="bold")
+        ax.set_ylim(0, 1.01)
+        ax.tick_params(axis="x", labelrotation=15, labelsize=10)
+        ax.tick_params(axis="y", labelsize=10)
+        ax.grid(axis="y", linestyle="--", linewidth=0.8, alpha=0.7)
+        fig.tight_layout()
+
+    return fig
