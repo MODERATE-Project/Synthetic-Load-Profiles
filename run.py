@@ -44,7 +44,7 @@ CHECK_FOR_MIN_STATS = 10   #after these epochs, runs with lower stats than the c
 MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_all/fearsome-omen-403_2025-10-31-135650489/models/epoch_") / "epoch_.pt"
 
 create_data_paths = [
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/gentle-wave-384_2025-05-17-101257896/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/shadowed-coffin-406_2025-10-31-144954467/models/epoch_6985") / "epoch_6985.pt",
     Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_") / "epoch_.pt",
     Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_") / "epoch_.pt",
     Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_") / "epoch_.pt",
@@ -53,7 +53,7 @@ create_data_paths = [
 ]
 
 # Create synthetic data from existing model (if True, there is no training)
-CREATE_DATA = True
+CREATE_DATA = False
 
 # ==========================================================================================
 #                                        MAIN SCRIPT
@@ -83,35 +83,36 @@ if __name__ == '__main__':
     # inputFile = filter_profiles_with_extreme_peaks(inputFile)
 
     # for training on subgroups of the data
-    # for name in labels_file["label"].unique():
-    #     PROJECT_NAME = f'WGAN_final_{name}'
-    #     name_id = name.replace("WGAN_final_", "")
-    #     ids = labels_file[labels_file["label"] == name]["EAN_ID"].to_list()
-    #     data = inputFile.loc[:, [str(i) for i in ids]]
+    for name in labels_file["label"].unique():
+        PROJECT_NAME = f'WGAN_final_{name}'
+        name_id = name.replace("WGAN_final_", "")
+        ids = labels_file[labels_file["label"] == name]["EAN_ID"].to_list()
+        data = inputFile.loc[:, [str(i) for i in ids]]
 
-    #     train_data, test_data = split_data_train_test(data, train_ratio=0.8, random_state=42)
+        train_data, test_data = split_data_train_test(data, train_ratio=0.8, random_state=42)
 
-    #     run(params, MODEL_TYPE, PROJECT_NAME, 
-    #         train_data=train_data, 
-    #         logStats=LOG_STATS, 
-    #         useWandb=USE_WANDB, 
-    #         modelPath=None, 
-    #         createData=CREATE_DATA, 
-    #         useMarimo=False,
-    #         generate_n_profiles = 1300, 
-    #         test_data=test_data
-    #         )
+        run(params, MODEL_TYPE, PROJECT_NAME, 
+            train_data=train_data, 
+            logStats=LOG_STATS, 
+            useWandb=USE_WANDB, 
+            modelPath=create_data_paths[0], 
+            createData=CREATE_DATA, 
+            useMarimo=False,
+            generate_n_profiles = 1300, 
+            test_data=test_data
+            )
+        break
 
-    train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
+    # train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
     
-    # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
-    run(params, MODEL_TYPE, PROJECT_NAME, 
-        train_data=train_data, 
-        logStats=LOG_STATS, 
-        useWandb=USE_WANDB, 
-        modelPath=[MODEL_PATH], 
-        createData=CREATE_DATA, 
-        useMarimo=False,
-        generate_n_profiles = 1300, 
-        test_data=test_data)
+    # # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
+    # run(params, MODEL_TYPE, PROJECT_NAME, 
+    #     train_data=train_data, 
+    #     logStats=LOG_STATS, 
+    #     useWandb=USE_WANDB, 
+    #     modelPath=[MODEL_PATH], 
+    #     createData=CREATE_DATA, 
+    #     useMarimo=False,
+    #     generate_n_profiles = 1300, 
+    #     test_data=test_data)
     

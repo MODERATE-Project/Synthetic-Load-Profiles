@@ -7,7 +7,7 @@ from model.main import GAN, generate_data_from_saved_model, export_synthetic_dat
 import pandas as pd
 from model.plot import plot_similarity_scores
 
-def run(params, modelType, projectName, train_data, logStats, useWandb, modelPath, createData, useMarimo = False, 
+def run(params, modelType, projectName, train_data, logStats, useWandb, modelPath=None, createData=False, useMarimo = False, 
         generate_n_profiles = None, test_data = None):
     if modelPath and createData:
         for path in modelPath:
@@ -38,25 +38,42 @@ def run(params, modelType, projectName, train_data, logStats, useWandb, modelPat
                 output_path = data_path / "figures"
             )
     else:
-        wandb.init(
-            project = 'GAN',
-            mode = 'online' if useWandb else 'offline'
-        )
-        modelName = wandb.run.name
-        runNameTSSuffix = datetime.today().strftime('%Y-%m-%d-%H%M%S%f')[:-3]   #added to the end of the run name
-        runName = f'{modelName}_{runNameTSSuffix}' if len(modelName) > 0 else runNameTSSuffix
-        outputPath = Path().absolute() / 'runs' / projectName / runName
-        outputPath.mkdir(parents = True, exist_ok = True)
-        # Save the datasets
-        if test_data is not None:
-            train_data.to_csv(outputPath / 'train_data.csv')
-            test_data.to_csv(outputPath / 'test_data.csv')  
+        if modelPath is None:
+            wandb.init(
+                project = 'GAN',
+                mode = 'online' if useWandb else 'offline'
+            )
+            modelName = wandb.run.name
+            runNameTSSuffix = datetime.today().strftime('%Y-%m-%d-%H%M%S%f')[:-3]   #added to the end of the run name
+            runName = f'{modelName}_{runNameTSSuffix}' if len(modelName) > 0 else runNameTSSuffix
+            outputPath = Path().absolute() / 'runs' / projectName / runName
+            outputPath.mkdir(parents = True, exist_ok = True)
+            # Save the datasets
+            if test_data is not None:
+                train_data.to_csv(outputPath / 'train_data.csv')
+                test_data.to_csv(outputPath / 'test_data.csv') 
+        else:  # reinitiate training from existing model
+            modelPath = Path(modelPath).resolve()
+            outputPath = modelPath.parent.parent.parent.resolve()
+            wandb.init(
+                project = 'GAN',
+                mode = 'online' if useWandb else 'offline',
+                name = outputPath.name,
+                resume = "allow"
+            )
+            runName = wandb.run.name
+            train_data = pd.read_csv(outputPath / 'train_data.csv', index_col = 0)
+            test_data = pd.read_csv(outputPath / 'test_data.csv', index_col = 0)
+            train_data.index = pd.to_datetime(train_data.index, format = 'mixed')
+            test_data.index = pd.to_datetime(test_data.index, format = 'mixed')
+
+
         model = GAN(
             dataset = train_data,
             params = params,
             outputPath = outputPath,
             modelType = modelType,
-            modelStatePath = None,
+            modelStatePath = modelPath,
             logStats = logStats,
             wandb = wandb,
             useMarimo = useMarimo
