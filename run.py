@@ -82,6 +82,26 @@ if __name__ == '__main__':
     # Filter out profiles with maximum values within 95th percentile
     # inputFile = filter_profiles_with_extreme_peaks(inputFile)
 
+    # for training on subgroups of the data
+    # for name in labels_file["label"].unique():
+    #     PROJECT_NAME = f'WGAN_final_{name}'
+    #     name_id = name.replace("WGAN_final_", "")
+    #     ids = labels_file[labels_file["label"] == name]["EAN_ID"].to_list()
+    #     data = inputFile.loc[:, [str(i) for i in ids]]
+
+    #     train_data, test_data = split_data_train_test(data, train_ratio=0.8, random_state=42)
+
+    #     run(params, MODEL_TYPE, PROJECT_NAME, 
+    #         train_data=train_data, 
+    #         logStats=LOG_STATS, 
+    #         useWandb=USE_WANDB, 
+    #         modelPath=None, 
+    #         createData=CREATE_DATA, 
+    #         useMarimo=False,
+    #         generate_n_profiles = 1300, 
+    #         test_data=test_data
+    #         )
+
     train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
     
     # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
@@ -89,7 +109,7 @@ if __name__ == '__main__':
         train_data=train_data, 
         logStats=LOG_STATS, 
         useWandb=USE_WANDB, 
-        modelPath=None, 
+        modelPath=[MODEL_PATH], 
         createData=CREATE_DATA, 
         useMarimo=False,
         generate_n_profiles = 1300, 

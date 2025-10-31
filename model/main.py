@@ -678,8 +678,7 @@ def generate_data_from_saved_model(
             'synthetic_data': final_array,
             'final_features': final_features,
             'pool_features': pool_features,
-            'replaced_synthetic_data': synthetic_df[flagged_to_replace],
-            'replacement_synthetic_data': final_df[flagged_to_replace],
+            'synthetic_data_before': synthetic_df,
             'replacement_map': replacement_map,
         }
     except Exception as e:

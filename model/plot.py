@@ -184,7 +184,6 @@ def plot_similarity_scores(
     output_path.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path / filename, bbox_inches="tight", dpi=300)
     plt.close(fig)
-    return fig
 
 
 ############################################################################################

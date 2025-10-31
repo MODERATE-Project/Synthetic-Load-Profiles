@@ -4,17 +4,39 @@ from pathlib import Path
 import torch
 import gc
 from model.main import GAN, generate_data_from_saved_model, export_synthetic_data
-
+import pandas as pd
+from model.plot import plot_similarity_scores
 
 def run(params, modelType, projectName, train_data, logStats, useWandb, modelPath, createData, useMarimo = False, 
         generate_n_profiles = None, test_data = None):
     if modelPath and createData:
         for path in modelPath:
-            outputPath = Path(path).parent.parent.parent.parent.parent.parent.parent / "HVAC_identification" / "input_data"
+            outputPath_synthetic_data = Path(path).parent / "synthetic_data" 
             name = Path(path).parent.parent.parent.parent.name.replace("WGAN_final_", "").replace("standard", "None").replace("heat pump", "heat_pump")
-            outputPath.mkdir(parents = True, exist_ok = True)
-            X_synth = generate_data_from_saved_model(path, n_profiles = generate_n_profiles)
-            export_synthetic_data(X_synth, outputPath, filename = f'{generate_n_profiles}_profiles_{name}', fileFormat = ".parquet")
+            outputPath_synthetic_data.mkdir(parents = True, exist_ok = True)
+            # load train and test data
+            runName = path.parent.parent.parent.name
+            data_path = path.parent.parent.parent
+            train_data = pd.read_csv(data_path / 'train_data.csv')
+            test_data = pd.read_csv(data_path / 'test_data.csv')
+            synth_result = generate_data_from_saved_model(
+                path, 
+                n_profiles = generate_n_profiles,
+                train_data = train_data,
+                test_data = test_data,
+            )
+
+ 
+            X_synth = synth_result['synthetic_data']
+            export_synthetic_data(X_synth, outputPath_synthetic_data, filename = f'{generate_n_profiles}_profiles_{name}', fileFormat = ".parquet")
+            # create a report (figures) of the synthetic data
+            plot_similarity_scores(
+                train_data = train_data,
+                test_data = test_data,
+                synthetic_before = synth_result['synthetic_data_before'],
+                synthetic_after = synth_result['synthetic_data'],
+                output_path = data_path / "figures"
+            )
     else:
         wandb.init(
             project = 'GAN',
@@ -34,7 +56,7 @@ def run(params, modelType, projectName, train_data, logStats, useWandb, modelPat
             params = params,
             outputPath = outputPath,
             modelType = modelType,
-            modelStatePath = modelPath,
+            modelStatePath = None,
             logStats = logStats,
             wandb = wandb,
             useMarimo = useMarimo
