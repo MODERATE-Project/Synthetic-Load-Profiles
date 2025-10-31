@@ -16,7 +16,17 @@ import pyarrow.parquet as pq
 
 from model.data_manip import data_prep_wrapper, invert_min_max_scaler, revert_reshape_arr
 from model.plot import create_plots, create_html, plot_stats_progress
-from model.utils import compute_trends, calc_features, composite_metric
+from model.utils import (
+    compute_trends,
+    calc_features,
+    composite_metric,
+    load_reference_profiles,
+    ensure_numeric_profiles,
+    flag_profiles_by_similarity,
+    filter_pool_by_similarity,
+    build_feature_dataframe,
+    match_best_replacement,
+)
 
 
 DAY_COUNT = 368
@@ -546,49 +556,142 @@ class GAN(nn.Module):
             print(f"Error deleting previous model: {e}")
 
 
-def generate_data_from_saved_model(modelStatePath, n_profiles=None):
+def generate_data_from_saved_model(
+    modelStatePath,
+    n_profiles=None,
+    real_profiles: pd.DataFrame | None = None,
+    similarity_threshold: float = 0.85,
+    max_pool_attempts: int = 5,
+    train_data: pd.DataFrame = None,
+    test_data: pd.DataFrame = None,
+):
     try:
-        # import gzip
-        # with gzip.open(modelStatePath, 'rb') as f:
-        #     modelState = torch.load(f, weights_only = False)
+        modelStatePath = pathlib.Path(modelStatePath)
         modelState = torch.load(modelStatePath, weights_only = False)
         print(f"Successfully loaded model from {modelStatePath}")
-        
+
         Gen = Generator(modelState['gen_layers'])
         Gen.load_state_dict(modelState['gen_state_dict'])
+        device = modelState.get('device', torch.device('cpu'))
+        if not isinstance(device, torch.device):
+            device = torch.device(device)
+        Gen.to(device)
         Gen.eval()
-        
-        # Use n_profiles if specified, otherwise use the original profileCount
+
         profile_count = n_profiles if n_profiles is not None else modelState['profileCount']
-        
-        # Generate data in smaller batches to save memory
-        batch_size = 32  # Adjust this based on your available memory
-        num_batches = (profile_count + batch_size - 1) // batch_size
-        xSynth_list = []
-        
-        with torch.no_grad():  # No need to track gradients during generation
-            for i in range(num_batches):
-                start_idx = i * batch_size
-                end_idx = min((i + 1) * batch_size, profile_count)
-                current_batch_size = end_idx - start_idx
-                
-                noise = randn(current_batch_size, modelState['dimNoise'], 1, 1, device = modelState['device'])
-                xSynth_batch = Gen(noise)
-                xSynth_batch = xSynth_batch.cpu().numpy()  # Move to CPU immediately
-                xSynth_list.append(xSynth_batch)
-                
-                # Free memory
-                if modelState['device'].type == 'cuda':
-                    torch.cuda.empty_cache()
-        
-        # Combine batches
-        xSynth = np.vstack(xSynth_list)
-        xSynth = invert_min_max_scaler(xSynth, modelState['minMax'], FEATURE_RANGE)
-        xSynth = revert_reshape_arr(xSynth)
-        idx = modelState['dfIdx'][:modelState['dfIdx'].get_loc('#####0')]
-        xSynth = xSynth[:len(idx)]
-        xSynth = np.append(idx.to_numpy().reshape(-1, 1), xSynth, axis = 1)
-        return xSynth
+        batch_size = min(32, profile_count if profile_count > 0 else 1)
+        df_idx = modelState['dfIdx']
+        if not isinstance(df_idx, pd.Index):
+            df_idx = pd.Index(df_idx)
+        try:
+            cutoff = df_idx.get_loc('#####0')
+            df_idx = df_idx[:cutoff]
+        except KeyError:
+            pass
+        df_idx = pd.Index(df_idx)
+        if len(df_idx) == 0:
+            raise ValueError("The stored index does not contain any real timestamps.")
+
+
+        def _generate_synthetic_dataframe(num_profiles: int) -> pd.DataFrame:
+            if num_profiles <= 0:
+                return pd.DataFrame(index=df_idx)
+            
+            num_batches = (num_profiles + batch_size - 1) // batch_size
+            batch_list: list[np.ndarray] = []
+            with torch.no_grad():
+                for batch_idx in range(num_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min((batch_idx + 1) * batch_size, num_profiles)
+                    current_batch = end_idx - start_idx
+                    noise = randn(current_batch, modelState['dimNoise'], 1, 1, device = device)
+                    synth_batch = Gen(noise).cpu().numpy()
+                    batch_list.append(synth_batch)
+                    if device.type == 'cuda':
+                        torch.cuda.empty_cache()
+
+            arr = np.vstack(batch_list)
+            arr = invert_min_max_scaler(arr, modelState['minMax'], FEATURE_RANGE)
+            arr = revert_reshape_arr(arr)
+            arr = arr[: len(df_idx), : num_profiles]
+            columns = [f'synth_{idx}' for idx in range(arr.shape[1])]
+            return pd.DataFrame(arr, index=df_idx, columns=columns, dtype=np.float32)
+
+
+        synthetic_df = _generate_synthetic_dataframe(profile_count)
+        if synthetic_df.shape[1] == 0:
+            raise ValueError("No synthetic profiles were generated.")
+
+        flagged_cols, _ = flag_profiles_by_similarity(train_data, synthetic_df, similarity_threshold)
+        flagged_to_replace = list(flagged_cols)
+
+        replacement_map: list[tuple[str, str]] = []
+        if flagged_cols:
+            print(f"Flagging {len(flagged_cols)} synthetic profiles due to similarity > {similarity_threshold}.")
+        else:
+            print("No synthetic profiles exceeded the similarity threshold.")
+
+        pool_frames: list[pd.DataFrame] = []
+        attempts = 0
+        while flagged_to_replace and sum(df.shape[1] for df in pool_frames) < len(flagged_to_replace) and attempts < max_pool_attempts:
+            pool_candidate = _generate_synthetic_dataframe(profile_count)
+            cleaned_pool = filter_pool_by_similarity(real_df, pool_candidate, similarity_threshold)
+            if cleaned_pool.shape[1] > 0:
+                pool_frames.append(cleaned_pool)
+            attempts += 1
+
+        pool_df = pd.concat(pool_frames, axis = 1) if pool_frames else pd.DataFrame(index = df_idx)
+        if not pool_df.empty:
+            pool_df = ensure_numeric_profiles(pool_df, 'replacement pool')
+
+        column_order = list(synthetic_df.columns)
+        feature_labels = ['mean', 'std', 'min', 'max', 'median', 'skew', 'ptp', 'p25', 'p75']
+        synth_feature_df = build_feature_dataframe(synthetic_df, feature_labels)
+
+        unreplaced_flagged: list[str] = []
+        if flagged_to_replace and pool_df.shape[1] < len(flagged_to_replace):
+            print(
+                f"Warning: Only {pool_df.shape[1]} replacement profiles available for "
+                f"{len(flagged_to_replace)} flagged profiles. Keeping remaining flagged profiles."
+            )
+            unreplaced_flagged = flagged_to_replace[pool_df.shape[1]:]
+            flagged_to_replace = flagged_to_replace[: pool_df.shape[1]]
+
+        final_df = synthetic_df.drop(columns = flagged_to_replace, errors = 'ignore')
+        pool_feature_df = build_feature_dataframe(pool_df, feature_labels)
+        pool_feature_df_full = pool_feature_df.copy()
+
+        for flagged_col in flagged_to_replace:
+            if pool_df.empty:
+                break
+            target_features = synth_feature_df[flagged_col]
+            if pool_feature_df.empty:
+                break
+            best_col = match_best_replacement(target_features, pool_feature_df)
+            final_df[flagged_col] = pool_df[best_col].values
+            replacement_map.append((flagged_col, best_col))
+            pool_df = pool_df.drop(columns = best_col)
+            pool_feature_df = pool_feature_df.drop(columns = best_col)
+
+        final_df = final_df.reindex(columns = column_order)
+        final_array = np.column_stack([final_df.index.to_numpy(), final_df.to_numpy(dtype=np.float32)])
+
+        final_features = calc_features(final_df.to_numpy(dtype=np.float32), axis = 0)
+        if not pool_feature_df_full.empty:
+            pool_features = pool_feature_df_full.to_numpy(dtype=np.float32)
+        else:
+            pool_features = np.empty((len(feature_labels), 0), dtype=np.float32)
+
+        return {
+            'data': final_array,
+            'final_features': final_features,
+            'pool_features': pool_features,
+            'final_columns': column_order,
+            'pool_columns': list(pool_feature_df_full.columns),
+            'flagged_profiles': flagged_cols,
+            'unreplaced_flagged': unreplaced_flagged,
+            'replacement_map': replacement_map,
+        }
     except Exception as e:
         print(f"Error loading model from {modelStatePath}: {e}")
         raise

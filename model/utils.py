@@ -1,7 +1,9 @@
 import numpy as np
 from numba import njit
 from scipy.stats import skew
-
+import pandas as pd
+from pathlib import Path
+from typing import Tuple, List, Any
 
 
 
@@ -372,3 +374,135 @@ def filter_profiles_with_extreme_peaks(df, percentile=95):
     # Return filtered DataFrame
     return df[filtered_columns]
 
+   
+def _zscore_columns(df: pd.DataFrame) -> pd.DataFrame:
+    means = df.mean(axis=0)
+    stds = df.std(axis=0)
+    stds = stds.replace(0, 1.0)
+    return (df - means) / stds
+
+
+def compute_cosine_similarity_matrix(
+    real_profiles: pd.DataFrame,
+    synthetic_profiles: pd.DataFrame,
+) -> Tuple[np.ndarray, List[Any], List[Any]]:
+    real_cols = list(real_profiles.columns)
+    synthetic_cols = list(synthetic_profiles.columns)
+    real_matrix = real_profiles.to_numpy(dtype=np.float64)
+    synthetic_matrix = synthetic_profiles.to_numpy(dtype=np.float64)
+
+    real_norms = np.linalg.norm(real_matrix, axis=0)
+    synthetic_norms = np.linalg.norm(synthetic_matrix, axis=0)
+    real_norms[real_norms == 0.0] = np.finfo(float).eps
+    synthetic_norms[synthetic_norms == 0.0] = np.finfo(float).eps
+
+    similarity = (real_matrix.T @ synthetic_matrix) / np.outer(real_norms, synthetic_norms)
+    return similarity, real_cols, synthetic_cols
+
+
+def ensure_numeric_profiles(df: pd.DataFrame, label: str) -> pd.DataFrame:
+    """
+    Convert all entries to numeric values and fill invalid entries with zero.
+    """
+    if df.empty:
+        return df.astype(np.float32)
+
+    numeric_df = df.apply(pd.to_numeric, errors='coerce')
+    if numeric_df.isna().any().any():
+        numeric_df = numeric_df.fillna(0.0)
+        print(f"Warning: Non-numeric values encountered in {label}; filled with 0.0.")
+    return numeric_df.astype(np.float32)
+
+
+
+def flag_profiles_by_similarity(
+    real_profiles: pd.DataFrame,
+    synthetic_profiles: pd.DataFrame,
+    threshold: float,
+) -> Tuple[List[str], np.ndarray]:
+    """
+    Return the list of synthetic profile column names that exceed the similarity threshold.
+    """
+    similarity_matrix, _, synth_cols = compute_cosine_similarity_matrix(real_profiles, synthetic_profiles)
+    max_similarity = similarity_matrix.max(axis=0)
+    flagged = [col for col, sim in zip(synth_cols, max_similarity) if sim > threshold]
+    return flagged, similarity_matrix
+
+
+def filter_pool_by_similarity(
+    real_profiles: pd.DataFrame,
+    pool_profiles: pd.DataFrame,
+    threshold: float,
+) -> pd.DataFrame:
+    """
+    Drop pool profiles that exceed the similarity threshold w.r.t. the real profiles.
+    """
+    if pool_profiles.empty:
+        return pool_profiles
+    similarity_matrix, _, _ = compute_cosine_similarity_matrix(real_profiles, pool_profiles)
+    keep_mask = similarity_matrix.max(axis=0) <= threshold
+    return pool_profiles.loc[:, keep_mask]
+
+
+def build_feature_dataframe(
+    profiles: pd.DataFrame,
+    feature_labels: List[str],
+) -> pd.DataFrame:
+    """
+    Convenience helper to compute feature statistics for each profile column.
+    """
+    if profiles.empty:
+        return pd.DataFrame(index=feature_labels, columns=[], dtype=np.float32)
+    feature_array = calc_features(profiles.to_numpy(dtype=np.float32), axis=0)
+    return pd.DataFrame(feature_array, index=feature_labels, columns=profiles.columns)
+
+
+def match_best_replacement(
+    target_features: pd.Series,
+    pool_features: pd.DataFrame,
+) -> str:
+    """
+    Find the pool profile with the smallest feature-distance to the target profile.
+    """
+    distances = (pool_features.subtract(target_features, axis=0) ** 2).sum(axis=0) ** 0.5
+    return distances.idxmin()
+
+
+def compress_to_monthly_typical_day(profiles: pd.DataFrame) -> pd.DataFrame:
+    index = pd.to_datetime(profiles.index)
+    grouped = profiles.groupby([index.month, index.hour]).mean()
+    grouped.index = grouped.index.set_names(["month", "hour"])
+    return grouped.sort_index(level=[0, 1])
+
+
+def identify_sensitive_profiles(
+    real_profiles: pd.DataFrame,
+    synthetic_profiles: pd.DataFrame,
+    cosine_threshold: float = 0.85,
+) -> Tuple[set, pd.DataFrame]:
+    real_z = _zscore_columns(real_profiles)
+    synthetic_z = _zscore_columns(synthetic_profiles)
+    cosine_matrix, real_cols, synthetic_cols = compute_cosine_similarity_matrix(real_z, synthetic_z)
+
+    high_mask = cosine_matrix > cosine_threshold
+    flagged_indices = np.flatnonzero(high_mask.any(axis=0))
+    flagged_ids = {synthetic_cols[idx] for idx in flagged_indices}
+
+    real_idx, syn_idx = np.nonzero(high_mask)
+    if real_idx.size:
+        real_arr = np.asarray(real_cols, dtype=object)
+        synthetic_arr = np.asarray(synthetic_cols, dtype=object)
+        detail_df = pd.DataFrame(
+            {
+                "real_profile": real_arr[real_idx],
+                "synthetic_profile": synthetic_arr[syn_idx],
+                "cosine_similarity": cosine_matrix[real_idx, syn_idx].astype(float),
+                "dtw_distance": np.nan,
+            }
+        )
+    else:
+        detail_df = pd.DataFrame(
+            columns=["real_profile", "synthetic_profile", "cosine_similarity", "dtw_distance"]
+        )
+
+    return flagged_ids, detail_df
