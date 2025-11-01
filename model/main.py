@@ -82,6 +82,8 @@ class GAN(nn.Module):
         self.wandb = wandb
         self.useMarimo = useMarimo
         self.last_saved_model_path = None  # Track the last saved model path
+        self.start_epoch = 0  # absolute epoch to resume from
+        self.total_epochs_target = None  # filled after params + resume handling
 
         # Get parameters from `params.py`
         for key, value in self.params.items():
@@ -134,6 +136,8 @@ class GAN(nn.Module):
             self.Dis.load_state_dict(self.modelState['dis_state_dict'])
             self.optimGen.load_state_dict(self.modelState['optim_gen_state_dict'])
             self.optimDis.load_state_dict(self.modelState['optim_dis_state_dict'])
+            previous_epoch = self.modelState.get('epoch', -1)
+            self.start_epoch = max(previous_epoch + 1, 0)
 
         # Prepare real data for plotting
         self.arr_real = self.inputDataset.to_numpy().astype(np.float32)
@@ -145,6 +149,8 @@ class GAN(nn.Module):
 
         # Setup thread pool for background saving
         self.executor = ThreadPoolExecutor(max_workers=3)  # Increased to handle multiple background tasks
+        if self.total_epochs_target is None:
+            self.total_epochs_target = self.start_epoch + self.epochCount
 
     def train(self):
         logs = []
@@ -156,14 +162,17 @@ class GAN(nn.Module):
         scaler = torch.cuda.amp.GradScaler() if use_amp else None
 
         # Create progress bar
+        epoch_iterable = range(self.epochCount)
         if not self.useMarimo:
-            progress = tqdm(range(self.epochCount))
+            progress = tqdm(epoch_iterable)
         else:
             import marimo as mo
-            progress = mo.status.progress_bar(range(self.epochCount))
+            progress = mo.status.progress_bar(epoch_iterable)
 
         # Training loop
         for epoch in progress:
+            epoch_abs = self.start_epoch + epoch
+            epoch_abs_next = epoch_abs + 1
             if self.modelType == 'GAN':
                 loss_dict = {'_Dis.loss.real': 0, '_Dis.loss.fake': 0, '_Gen.loss': 0}
             elif self.modelType == 'WGAN':
@@ -172,7 +181,7 @@ class GAN(nn.Module):
 
             # Deactivate dropout layers in generator
             if self.modelType == 'GAN':
-                if epoch == self.dropoutOffEpoch:
+                if epoch_abs == self.dropoutOffEpoch:
                     for module in self.Gen.modules():
                         if isinstance(module, nn.Dropout2d):
                             module.p = 0
@@ -304,14 +313,19 @@ class GAN(nn.Module):
 
             # Log progress with wandb 
             if self.wandb:
-                self.wandb.log(log_dict)
+                self.wandb.log(log_dict, step=epoch_abs)
             
             # Clean up GPU memory between epochs
             if self.device.type == 'cuda':
                 torch.cuda.empty_cache()
             
             # Generate sample for (interim) result export
-            if self.logStats or (epoch + 1) % self.saveFreq == 0 or epoch + 1 == self.epochCount:
+            save_interval = False
+            if getattr(self, 'saveFreq', None) is not None and self.saveFreq > 0:
+                save_interval = (epoch_abs_next % self.saveFreq == 0)
+            is_last_epoch = epoch_abs_next == self.total_epochs_target
+
+            if self.logStats or save_interval or is_last_epoch:
                 sampleTemp = self.generate_data()
                 stats = composite_metric(self.arr_real, sampleTemp, self.arr_featuresReal, self.arr_timeFeaturesReal)
                 stats_list.append(stats)
@@ -326,13 +340,13 @@ class GAN(nn.Module):
                     minStat = stats
                 
                 # Regular interval saving
-                if (epoch + 1) % self.saveFreq == 0:
+                if save_interval:
                     # Save models
                     if self.saveModels:
-                        epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
+                        epochModelPath = self.modelPath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochModelPath, exist_ok=True)
                         
-                        self.save_model_state_background(epoch, epochModelPath)
+                        self.save_model_state_background(epoch_abs, epochModelPath)
                         # Delete previous model if one exists
                         if self.last_saved_model_path is not None and self.last_saved_model_path.exists():
                             self.executor.submit(self._delete_previous_model, self.last_saved_model_path)
@@ -340,15 +354,15 @@ class GAN(nn.Module):
                     
                     # Save plots
                     if self.savePlots:
-                        epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
+                        epochPlotPath = self.plotPath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochPlotPath, exist_ok=True)
                         self.create_plots_background(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
-                        if epoch + 1 == self.epochCount:
+                        if is_last_epoch:
                             create_html(self.plotPath)  # Keep this synchronous as it's only at the end
                     
                     # Save samples
                     if self.saveSamples:
-                        epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
+                        epochSamplePath = self.samplePath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochSamplePath, exist_ok=True)
                         self.export_synthetic_data_background(sampleTemp, epochSamplePath, self.outputFormat)
                 
@@ -356,28 +370,28 @@ class GAN(nn.Module):
                 elif self.logStats and is_best_model:
                     # Save plots for best model
                     if self.savePlots:
-                        epochPlotPath = self.plotPath / f'epoch_{epoch + 1}'
+                        epochPlotPath = self.plotPath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochPlotPath, exist_ok=True)
                         self.create_plots_background(self.arr_real, self.arr_featuresReal, self.arr_dt, self.trendReal_dict, sampleTemp, epochPlotPath)
                     
                     # Save samples for best model
                     if self.saveSamples:
-                        epochSamplePath = self.samplePath / f'epoch_{epoch + 1}'
+                        epochSamplePath = self.samplePath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochSamplePath, exist_ok=True)
                         self.export_synthetic_data_background(sampleTemp, epochSamplePath, self.outputFormat)
                     
                     # Save model for best model
                     if self.saveModels:
-                        epochModelPath = self.modelPath / f'epoch_{epoch + 1}'
+                        epochModelPath = self.modelPath / f'epoch_{epoch_abs_next}'
                         os.makedirs(epochModelPath, exist_ok=True)
-                        self.save_model_state_background(epoch, epochModelPath)
+                        self.save_model_state_background(epoch_abs, epochModelPath)
                         # Delete previous model if one exists
                         if self.last_saved_model_path is not None and self.last_saved_model_path.exists():
                             self.executor.submit(self._delete_previous_model, self.last_saved_model_path)
                         self.last_saved_model_path = epochModelPath
 
             # Log progress offline
-            logs_dict = {'epoch': epoch} | log_dict if not self.logStats else {'epoch': epoch} | log_dict | {'stats': stats}
+            logs_dict = {'epoch': epoch_abs} | log_dict if not self.logStats else {'epoch': epoch_abs} | log_dict | {'stats': stats}
             logs.append(logs_dict)
 
         # Save logged parameters
