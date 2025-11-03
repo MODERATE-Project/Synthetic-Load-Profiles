@@ -119,10 +119,9 @@ def plot_similarity_boxplot(similarity_map: dict[str, np.ndarray]) -> plt.Figure
         fliersize=2,
     )
 
-    ax.set_title("Cosine Similarity Distributions", fontsize=14, fontweight="bold")
     ax.set_xlabel("")
     ax.set_ylabel("Cosine similarity", fontsize=12, fontweight="bold")
-    ax.set_ylim(0, 1.01)
+    ax.set_ylim(0, 1)
     ax.tick_params(axis="x", labelrotation=15, labelsize=10)
     ax.tick_params(axis="y", labelsize=10)
     ax.grid(axis="y", linestyle="--", linewidth=0.8, alpha=0.7)

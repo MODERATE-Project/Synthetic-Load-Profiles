@@ -175,9 +175,9 @@ def plot_similarity_scores(
         raise ValueError("All datasets must be provided to plot similarity scores.")
 
     similarity_map = {
-        "Train vs Test": compute_cosine_similarity_matrix(train_data, test_data)[0],
-        "Synthetic vs Test (pre-swap)": compute_cosine_similarity_matrix(synthetic_before, test_data)[0],
-        "Synthetic vs Test (post-swap)": compute_cosine_similarity_matrix(synthetic_after, test_data)[0],
+        "Test vs Train": compute_cosine_similarity_matrix(test_data, train_data)[0],
+        "Synthetic vs Train (pre-swap)": compute_cosine_similarity_matrix(synthetic_before, train_data)[0],
+        "Synthetic vs Train (post-swap)": compute_cosine_similarity_matrix(synthetic_after, train_data)[0],
     }
 
     fig = plot_similarity_boxplot(similarity_map)

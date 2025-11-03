@@ -626,7 +626,7 @@ def generate_data_from_saved_model(
             arr = invert_min_max_scaler(arr, modelState['minMax'], FEATURE_RANGE)
             arr = revert_reshape_arr(arr)
             arr = arr[: len(df_idx), : num_profiles]
-            columns = [f'synth_{idx}' for idx in range(arr.shape[1])]
+            columns = [f'{idx}' for idx in range(arr.shape[1])]
             return pd.DataFrame(arr, index=df_idx, columns=columns, dtype=np.float32)
 
 
@@ -710,9 +710,9 @@ def export_synthetic_data(arr, outputPath, filename = 'example_synth_profiles', 
         case '.npy':
             np.save(file = filePath, arr = arr)
         case '.csv':
-            pd.DataFrame(arr).set_index(0).astype(np.float32).to_csv(filePath)
+            pd.DataFrame(arr).astype(np.float32).to_csv(filePath)
         case '.xlsx':
-            pd.DataFrame(arr).set_index(0).astype(np.float32).to_excel(filePath)
+            pd.DataFrame(arr).astype(np.float32).to_excel(filePath)
         case '.parquet':
-            pd.DataFrame(arr).set_index(0).astype(np.float32).to_parquet(filePath)
+            pd.DataFrame(arr).astype(np.float32).to_parquet(filePath)
     print(f"Successfully exported synthetic data to {filePath}")

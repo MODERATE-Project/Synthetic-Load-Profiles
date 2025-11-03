@@ -29,7 +29,7 @@ LOG_STATS = True
 USE_WANDB = True
 
 # Set the number of epochs
-EPOCH_COUNT = 7_000
+EPOCH_COUNT = 10_000
 
 # Change the result save frequency; save all samples/models in addition to visualizations
 SAVE_FREQ = 50000000
@@ -41,14 +41,14 @@ CHECK_FOR_MIN_STATS = 10   #after these epochs, runs with lower stats than the c
 ####################################################################################################
 
 # Model state path (optional, for continuation of training or generation of data)
-MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_all/fearsome-omen-403_2025-10-31-135650489/models/epoch_") / "epoch_.pt"
+MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_all/fearsome-omen-403_2025-10-31-135650489/models/epoch_899") / "epoch_899.pt"
 
 create_data_paths = [
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/shadowed-coffin-406_2025-10-31-144954467/models/epoch_6985") / "epoch_6985.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_") / "epoch_.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_") / "epoch_.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_") / "epoch_.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_") / "epoch_.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/shadowed-coffin-406_2025-10-31-144954467/models/epoch_20920") / "epoch_20920.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/mystical-raven-414_2025-10-31-195113535/models/epoch_2691") / "epoch_2691.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/ghastly-ripple-413_2025-10-31-181921063/models/epoch_4695") / "epoch_4695.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/frightful-echo-408_2025-10-31-163454888/models/epoch_5872") / "epoch_5872.pt",
+    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/murky-charm-405_2025-10-31-144919919/models/epoch_5748") / "epoch_5748.pt",
 
 ]
 
@@ -83,36 +83,50 @@ if __name__ == '__main__':
     # inputFile = filter_profiles_with_extreme_peaks(inputFile)
 
     # for training on subgroups of the data
-    for name in labels_file["label"].unique():
-        PROJECT_NAME = f'WGAN_final_{name}'
-        name_id = name.replace("WGAN_final_", "")
-        ids = labels_file[labels_file["label"] == name]["EAN_ID"].to_list()
-        data = inputFile.loc[:, [str(i) for i in ids]]
+    # for name in labels_file["label"].unique():
+    #     PROJECT_NAME = f'WGAN_final_{name}'
+    #     name_id = name.replace("WGAN_final_", "")
+    #     ids = labels_file[labels_file["label"] == name]["EAN_ID"].to_list()
+    #     data = inputFile.loc[:, [str(i) for i in ids]]
 
-        train_data, test_data = split_data_train_test(data, train_ratio=0.8, random_state=42)
+    #     train_data, test_data = split_data_train_test(data, train_ratio=0.8, random_state=42)
 
-        run(params, MODEL_TYPE, PROJECT_NAME, 
-            train_data=train_data, 
-            logStats=LOG_STATS, 
-            useWandb=USE_WANDB, 
-            modelPath=create_data_paths[0], 
-            createData=CREATE_DATA, 
-            useMarimo=False,
-            generate_n_profiles = 1300, 
-            test_data=test_data
-            )
-        break
+    #     run(params, MODEL_TYPE, PROJECT_NAME, 
+    #         train_data=train_data, 
+    #         logStats=LOG_STATS, 
+    #         useWandb=USE_WANDB, 
+    #         modelPath=create_data_paths[0], 
+    #         createData=CREATE_DATA, 
+    #         useMarimo=False,
+    #         generate_n_profiles = 1300, 
+    #         test_data=test_data
+    #         )
+    #     break
 
-    # train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
-    
-    # # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
+    # train full model on all data
+    train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
     # run(params, MODEL_TYPE, PROJECT_NAME, 
     #     train_data=train_data, 
     #     logStats=LOG_STATS, 
     #     useWandb=USE_WANDB, 
-    #     modelPath=[MODEL_PATH], 
+    #     modelPath=MODEL_PATH, 
     #     createData=CREATE_DATA, 
     #     useMarimo=False,
     #     generate_n_profiles = 1300, 
     #     test_data=test_data)
+    
+    # generate differet data sizes from each submodel (trained on the different subgroups and on the full data)
+    for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
+        for model_path in create_data_paths:
+            run(params, 
+                MODEL_TYPE, 
+                PROJECT_NAME, 
+                train_data=train_data, 
+                logStats=LOG_STATS, 
+                useWandb=USE_WANDB, 
+                modelPath=model_path, 
+                createData=True, 
+                useMarimo=False,
+                generate_n_profiles = generation_nr, 
+                test_data=test_data)
     

@@ -6,40 +6,51 @@ import gc
 from model.main import GAN, generate_data_from_saved_model, export_synthetic_data
 import pandas as pd
 from model.plot import plot_similarity_scores
+from typing import Literal
 
-def run(params, modelType, projectName, train_data, logStats, useWandb, modelPath=None, createData=False, useMarimo = False, 
-        generate_n_profiles = None, test_data = None):
+def run(params: dict, 
+        modelType: Literal['GAN', 'WGAN'], 
+        projectName: str, 
+        train_data: pd.DataFrame, 
+        logStats: bool, 
+        useWandb: bool, 
+        modelPath: Path=None, 
+        createData: bool=False, 
+        useMarimo: bool = False, 
+        generate_n_profiles = None, test_data = None
+        ):
     if modelPath and createData:
-        for path in modelPath:
-            outputPath_synthetic_data = Path(path).parent / "synthetic_data" 
-            name = Path(path).parent.parent.parent.parent.name.replace("WGAN_final_", "").replace("standard", "None").replace("heat pump", "heat_pump")
-            outputPath_synthetic_data.mkdir(parents = True, exist_ok = True)
-            # load train and test data
-            runName = path.parent.parent.parent.name
-            data_path = path.parent.parent.parent
-            train_data = pd.read_csv(data_path / 'train_data.csv', index_col = 0)
-            test_data = pd.read_csv(data_path / 'test_data.csv', index_col = 0)
-            train_data.index = pd.to_datetime(train_data.index, format = 'mixed')
-            test_data.index = pd.to_datetime(test_data.index, format = 'mixed')
-            synth_result = generate_data_from_saved_model(
-                path, 
-                n_profiles = generate_n_profiles,
-                train_data = train_data,
-                test_data = test_data,
-            )
+        outputPath_synthetic_data = Path(__file__).parent / "synthetic_data" 
+        name = Path(modelPath).parent.parent.parent.parent.name.replace("WGAN_final_", "").replace("standard", "None").replace("heat pump", "heat_pump")
+        outputPath_synthetic_data.mkdir(parents = True, exist_ok = True)
+        # load train and test data
+        runName = modelPath.parent.parent.parent.name
+        data_path = modelPath.parent.parent.parent
+        train_data = pd.read_csv(data_path / 'train_data.csv', index_col = 0)
+        test_data = pd.read_csv(data_path / 'test_data.csv', index_col = 0)
+        train_data.index = pd.to_datetime(train_data.index, format = 'mixed')
+        test_data.index = pd.to_datetime(test_data.index, format = 'mixed')
+        synth_result = generate_data_from_saved_model(
+            modelPath, 
+            n_profiles = generate_n_profiles,
+            train_data = train_data,
+            test_data = test_data,
+        )
 
- 
-            X_synth = synth_result['synthetic_data']
-            export_synthetic_data(X_synth, outputPath_synthetic_data, filename = f'{generate_n_profiles}_profiles_{name}', fileFormat = ".parquet")
-            # create a report (figures) of the synthetic data
-            plot_similarity_scores(
-                train_data = train_data,
-                test_data = test_data,
-                synthetic_before = synth_result['synthetic_data_before'],
-                synthetic_after = synth_result['synthetic_data'],
-                output_path = data_path / "figures"
-            )
+
+        X_synth = synth_result['synthetic_data']
+        export_synthetic_data(X_synth, outputPath_synthetic_data, filename = f'{generate_n_profiles}_profiles_{name}', fileFormat = ".parquet")
+        # create a report (figures) of the synthetic data
+        plot_similarity_scores(
+            train_data = train_data,
+            test_data = test_data,
+            synthetic_before = synth_result['synthetic_data_before'],
+            synthetic_after = synth_result['synthetic_data'],
+            output_path = data_path / "figures",
+            filename = f'{generate_n_profiles}_profiles_{name}_cosine_similarity.png'
+        )
     else:
+        print(f"Creating new model from scratch")
         if modelPath is None:
             wandb.init(
                 project = 'GAN',
@@ -55,6 +66,7 @@ def run(params, modelType, projectName, train_data, logStats, useWandb, modelPat
                 train_data.to_csv(outputPath / 'train_data.csv')
                 test_data.to_csv(outputPath / 'test_data.csv') 
         else:  # reinitiate training from existing model
+            print(f"Resuming training from existing model at {modelPath}")
             modelPath = Path(modelPath).resolve()
             outputPath = modelPath.parent.parent.parent.resolve()
             wandb.init(
