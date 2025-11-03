@@ -689,7 +689,7 @@ def generate_data_from_saved_model(
             pool_features = np.empty((len(feature_labels), 0), dtype=np.float32)
 
         return {
-            'synthetic_data': final_array,
+            'synthetic_data': final_df,
             'final_features': final_features,
             'pool_features': pool_features,
             'synthetic_data_before': synthetic_df,

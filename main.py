@@ -17,8 +17,10 @@ def run(params, modelType, projectName, train_data, logStats, useWandb, modelPat
             # load train and test data
             runName = path.parent.parent.parent.name
             data_path = path.parent.parent.parent
-            train_data = pd.read_csv(data_path / 'train_data.csv')
-            test_data = pd.read_csv(data_path / 'test_data.csv')
+            train_data = pd.read_csv(data_path / 'train_data.csv', index_col = 0)
+            test_data = pd.read_csv(data_path / 'test_data.csv', index_col = 0)
+            train_data.index = pd.to_datetime(train_data.index, format = 'mixed')
+            test_data.index = pd.to_datetime(test_data.index, format = 'mixed')
             synth_result = generate_data_from_saved_model(
                 path, 
                 n_profiles = generate_n_profiles,
