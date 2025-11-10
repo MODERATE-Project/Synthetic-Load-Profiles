@@ -20,32 +20,32 @@ import argparse
 LABEL_DICT = {"PV": "PV", "heat_pump+PV": "HP+PV", "EV": "EV", "EV+PV": "EV+PV", "None":"None"}
 
 # Model persistence configuration
-MODEL_DIR = "saved_models"
-DEFAULT_MODEL_NAME = "xgboost_classifier"
+MODEL_DIR = pathlib.Path(__file__).parent / "identification_models"
+DEFAULT_MODEL_NAME = pathlib.Path(__file__).parent / "xgboost_classifier"
 
 # Feature caching system for performance optimization
-FEATURE_CACHE_DIR = "feature_cache"
+FEATURE_CACHE_DIR = pathlib.Path(__file__).parent / "identification_feature_cache"
 
 
 def ensure_model_directory():
     """Ensure the model directory exists."""
-    if not os.path.exists(MODEL_DIR):
-        os.makedirs(MODEL_DIR)
+    if not MODEL_DIR.exists():
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
         print(f"Created model directory: {MODEL_DIR}")
 
 def ensure_feature_cache_directory():
     """Ensure the feature cache directory exists."""
-    if not os.path.exists(FEATURE_CACHE_DIR):
-        os.makedirs(FEATURE_CACHE_DIR)
+    if not FEATURE_CACHE_DIR.exists():
+        FEATURE_CACHE_DIR.mkdir(parents=True, exist_ok=True)
         print(f"Created feature cache directory: {FEATURE_CACHE_DIR}")
 
 def get_feature_cache_path(cache_key):
     """Get the file path for cached features."""
-    return os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_features.pkl")
+    return FEATURE_CACHE_DIR / f"{cache_key}_features.pkl"
 
 def get_feature_metadata_path(cache_key):
     """Get the file path for feature metadata."""
-    return os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_metadata.pkl")
+    return FEATURE_CACHE_DIR / f"{cache_key}_metadata.pkl"
 
 def feature_cache_exists(cache_key):
     """Check if cached features exist on disk."""
@@ -54,12 +54,12 @@ def feature_cache_exists(cache_key):
     feature_path = get_feature_cache_path(cache_key)
     metadata_path = get_feature_metadata_path(cache_key)
     # Check for new pickle format first, then fall back to old JSON format
-    metadata_path_json = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_metadata.json")
+    metadata_path_json = FEATURE_CACHE_DIR / f"{cache_key}_metadata.json"
     
     # For backward compatibility, also check for old joblib format
-    feature_path_joblib = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_features.joblib")
+    feature_path_joblib = FEATURE_CACHE_DIR / f"{cache_key}_features.joblib"
     
-    return (os.path.exists(feature_path) or os.path.exists(feature_path_joblib)) and (os.path.exists(metadata_path) or os.path.exists(metadata_path_json))
+    return (feature_path.exists() or feature_path_joblib.exists()) and (metadata_path.exists() or metadata_path_json.exists())
 
 def save_features_to_disk(X, y, cache_key, labels_df_shape, time_series_shape):
     """Save features to disk with metadata."""
@@ -100,13 +100,13 @@ def load_features_from_disk(cache_key):
     
     try:
         # Load features - try pickle first, then fall back to joblib for backward compatibility
-        feature_path_joblib = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_features.joblib")
+        feature_path_joblib = FEATURE_CACHE_DIR / f"{cache_key}_features.joblib"
         
-        if os.path.exists(feature_path):
+        if feature_path.exists():
             # New pickle format
             with open(feature_path, 'rb') as f:
                 X, y = pickle.load(f)
-        elif os.path.exists(feature_path_joblib):
+        elif feature_path_joblib.exists():
             # Old joblib format - load and migrate to pickle
             X, y = joblib.load(feature_path_joblib)
             # Save in new pickle format for future use
@@ -117,11 +117,11 @@ def load_features_from_disk(cache_key):
             raise FileNotFoundError(f"Feature file not found for {cache_key}")
         
         # Load metadata - try pickle first, fall back to JSON for backwards compatibility
-        metadata_path_json = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_metadata.json")
-        if os.path.exists(metadata_path):
+        metadata_path_json = FEATURE_CACHE_DIR / f"{cache_key}_metadata.json"
+        if metadata_path.exists():
             with open(metadata_path, 'rb') as f:
                 metadata = pickle.load(f)
-        elif os.path.exists(metadata_path_json):
+        elif metadata_path_json.exists():
             with open(metadata_path_json, 'r') as f:
                 metadata = json.load(f)
             # Optionally migrate to pickle format
@@ -147,13 +147,13 @@ def validate_cached_features(cache_key, labels_df, time_series):
     
     try:
         metadata_path = get_feature_metadata_path(cache_key)
-        metadata_path_json = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_metadata.json")
+        metadata_path_json = FEATURE_CACHE_DIR / f"{cache_key}_metadata.json"
         
         # Try pickle first, fall back to JSON for backwards compatibility
-        if os.path.exists(metadata_path):
+        if metadata_path.exists():
             with open(metadata_path, 'rb') as f:
                 metadata = pickle.load(f)
-        elif os.path.exists(metadata_path_json):
+        elif metadata_path_json.exists():
             with open(metadata_path_json, 'r') as f:
                 metadata = json.load(f)
         else:
@@ -187,10 +187,10 @@ def save_model(model, label_encoder, classification_report_dict, model_name=DEFA
     ensure_model_directory()
     
     # Define file paths
-    model_path = os.path.join(MODEL_DIR, f"{model_name}_model.joblib")
-    encoder_path = os.path.join(MODEL_DIR, f"{model_name}_label_encoder.joblib")
-    report_path = os.path.join(MODEL_DIR, f"{model_name}_classification_report.pkl")
-    cv_metrics_path = os.path.join(MODEL_DIR, f"{model_name}_cv_metrics.pkl")
+    model_path = MODEL_DIR / f"{model_name}_model.joblib"
+    encoder_path = MODEL_DIR / f"{model_name}_label_encoder.joblib"
+    report_path = MODEL_DIR / f"{model_name}_classification_report.pkl"
+    cv_metrics_path = MODEL_DIR / f"{model_name}_cv_metrics.pkl"
     
     # Save model and encoder using joblib
     joblib.dump(model, model_path)
@@ -221,14 +221,14 @@ def model_exists(model_name=DEFAULT_MODEL_NAME):
     Returns:
         bool: True if all required files exist, False otherwise
     """
-    model_path = os.path.join(MODEL_DIR, f"{model_name}_model.joblib")
-    encoder_path = os.path.join(MODEL_DIR, f"{model_name}_label_encoder.joblib")
-    report_path = os.path.join(MODEL_DIR, f"{model_name}_classification_report.pkl")
-    report_path_json = os.path.join(MODEL_DIR, f"{model_name}_classification_report.json")
+    model_path = MODEL_DIR / f"{model_name}_model.joblib"
+    encoder_path = MODEL_DIR / f"{model_name}_label_encoder.joblib"
+    report_path = MODEL_DIR / f"{model_name}_classification_report.pkl"
+    report_path_json = MODEL_DIR / f"{model_name}_classification_report.json"
     
     # Check if all required files exist (with backwards compatibility for JSON reports)
-    return (os.path.exists(model_path) and os.path.exists(encoder_path) and 
-            (os.path.exists(report_path) or os.path.exists(report_path_json)))
+    return (model_path.exists() and encoder_path.exists() and 
+            (report_path.exists() or report_path_json.exists()))
 
 def load_model(model_name=DEFAULT_MODEL_NAME):
     """
@@ -247,10 +247,10 @@ def load_model(model_name=DEFAULT_MODEL_NAME):
         raise FileNotFoundError(f"Model '{model_name}' not found in {MODEL_DIR}")
     
     # Define file paths
-    model_path = os.path.join(MODEL_DIR, f"{model_name}_model.joblib")
-    encoder_path = os.path.join(MODEL_DIR, f"{model_name}_label_encoder.joblib")
-    report_path = os.path.join(MODEL_DIR, f"{model_name}_classification_report.pkl")
-    cv_metrics_path = os.path.join(MODEL_DIR, f"{model_name}_cv_metrics.pkl")
+    model_path = MODEL_DIR / f"{model_name}_model.joblib"
+    encoder_path = MODEL_DIR / f"{model_name}_label_encoder.joblib"
+    report_path = MODEL_DIR / f"{model_name}_classification_report.pkl"
+    cv_metrics_path = MODEL_DIR / f"{model_name}_cv_metrics.pkl"
     
     # Load model and encoder
     model = joblib.load(model_path)
@@ -2431,10 +2431,10 @@ def main():
     SCENARIO_NAME = "sum" # sum will include the sum as feature. "daily" will include daily features
 
     # load real data
-    real_labels_df = pd.read_csv(pathlib.Path("input_data") / "fluvius_indicators.csv")
+    real_labels_df = pd.read_csv(pathlib.Path("data") / "sample_data" / "opendata_fluvius" / "fluvius_indicators.csv")
     real_labels_df.rename(columns={"EAN_ID": "ID", "label": "Category"}, inplace=True)
     real_labels_df["Category"] = real_labels_df["Category"].map({"standard": "None", "PV": "PV", "heat pump+PV": "HP+PV", "EV": "EV", "EV+PV": "EV+PV"})
-    real_time_series = pd.read_csv(pathlib.Path("input_data") / "fluvius_wide_format.csv", index_col=0)
+    real_time_series = pd.read_csv(pathlib.Path("data") / "sample_data" / "opendata_fluvius" / "fluvius_wide_format.csv", index_col=0)
 
     # OPTIMIZATION: Pre-calculate features for all datasets to avoid redundant calculations
     print("🚀 Pre-calculating features for all datasets (optimization)...")
