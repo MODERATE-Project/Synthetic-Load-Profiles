@@ -360,7 +360,7 @@ def calculate_all_synthetic_features(
     force_recalculate_features: bool = False,
 ) -> List[Tuple[str, pd.DataFrame, pd.Series, str]]:
     labels_df_1300 = create_labels_for_original_shape_synthetic_profiles()
-    synthetic_time_series_1300 = load_synthetic_profiles_in_originial_shape()
+    synthetic_time_series_1300 = load_synthetic_profiles_in_originial_shape(BASE_DIR / "synthetic_data")
     X_synthetic_1300, y_synthetic_1300 = calculate_features_cached(
         labels_df_1300,
         synthetic_time_series_1300,
@@ -370,7 +370,7 @@ def calculate_all_synthetic_features(
     )
 
     labels_df_5000 = create_1000_labels_df()
-    synthetic_time_series_5000 = load_synthetic_1000_profiles_per_type()
+    synthetic_time_series_5000 = load_synthetic_1000_profiles_per_type(BASE_DIR / "synthetic_data")
     X_synthetic_5000, y_synthetic_5000 = calculate_features_cached(
         labels_df_5000,
         synthetic_time_series_5000,
@@ -380,7 +380,7 @@ def calculate_all_synthetic_features(
     )
 
     labels_df_25000 = create_labels_for_5000_synthetic_profiles_per_type()
-    synthetic_time_series_25000 = load_5000_synthetic_profiles_per_type()
+    synthetic_time_series_25000 = load_5000_synthetic_profiles_per_type(BASE_DIR / "synthetic_data")
     X_synthetic_25000, y_synthetic_25000 = calculate_features_cached(
         labels_df_25000,
         synthetic_time_series_25000,
@@ -390,7 +390,7 @@ def calculate_all_synthetic_features(
     )
 
     labels_df_50000 = create_labels_for_50_000_labels_df()
-    synthetic_time_series_50000 = load_50_000_synthetic_profiles_per_type()
+    synthetic_time_series_50000 = load_50_000_synthetic_profiles_per_type(BASE_DIR / "synthetic_data")
     X_synthetic_50000, y_synthetic_50000 = calculate_features_cached(
         labels_df_50000,
         synthetic_time_series_50000,
@@ -400,7 +400,7 @@ def calculate_all_synthetic_features(
     )
 
     labels_df_100000 = create_labels_for_100_000_labels_df()
-    synthetic_time_series_100000 = load_100_000_synthetic_profiles_per_type()
+    synthetic_time_series_100000 = load_100_000_synthetic_profiles_per_type(BASE_DIR / "synthetic_data")
     X_synthetic_100000, y_synthetic_100000 = calculate_features_cached(
         labels_df_100000,
         synthetic_time_series_100000,
@@ -571,7 +571,7 @@ def label_synthetic_data_and_compare_distribution(
 
     print("\n🎯 Step 2: Loading large synthetic dataset and predicting labels...")
 
-    synthetic_time_series_large = load_1300_unlabeled_synthetic_profiles()
+    synthetic_time_series_large = load_1300_unlabeled_synthetic_profiles(BASE_DIR / "synthetic_data")
     dummy_labels_df = pd.DataFrame(
         {
             "ID": range(1, synthetic_time_series_large.shape[1] + 1),
@@ -591,7 +591,7 @@ def label_synthetic_data_and_compare_distribution(
 
     print(f"Predicted label distribution: {pd.Series(y_synthetic_pred).value_counts().to_dict()}")
 
-    labeled_synthetic_data = load_synthetic_profiles_in_originial_shape()
+    labeled_synthetic_data = load_synthetic_profiles_in_originial_shape(BASE_DIR / "synthetic_data")
     synthetic_labels = create_labels_for_original_shape_synthetic_profiles()
     X_synthetic_labeled, _ = calculate_features_cached(
         synthetic_labels,
@@ -610,7 +610,7 @@ def label_synthetic_data_and_compare_distribution(
             "Category": ["NONE"] * 10_000,
         }
     )
-    synthetic_data_10000 = load_10_000_unlabeled_synthetic_profiles()
+    synthetic_data_10000 = load_10_000_unlabeled_synthetic_profiles(BASE_DIR / "synthetic_data")
     X_synthetic_10000, _ = calculate_features_cached(
         dummy_labels_df_10000,
         synthetic_data_10000,

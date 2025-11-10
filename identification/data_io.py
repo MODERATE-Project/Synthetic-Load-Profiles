@@ -21,12 +21,12 @@ def get_sep(path: pathlib.Path) -> str:
         return sep
 
 
-def load_10_000_unlabeled_synthetic_profiles(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_10_000_unlabeled_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the 10,000 unlabeled synthetic profiles."""
     return pd.read_parquet(path / "10000_profiles_all.parquet")
 
 
-def load_synthetic_1000_profiles_per_type(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_synthetic_1000_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
     """Load the synthetic 1,000 profiles per type (5,000 total)."""
     df_list: List[pd.DataFrame] = []
     for label_key in LABEL_DICT:
@@ -39,7 +39,7 @@ def load_synthetic_1000_profiles_per_type(path: pathlib.Path = pathlib.Path("inp
     return synthetic_time_series
 
 
-def load_5000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_5000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
     """Load the synthetic 5,000 profiles per type (25,000 total)."""
     df_list: List[pd.DataFrame] = []
     for label_key in LABEL_DICT:
@@ -52,7 +52,7 @@ def load_5000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("inp
     return synthetic_time_series
 
 
-def load_50_000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_50_000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
     """Load the synthetic 50,000 profiles per type (250,000 total)."""
     df_list: List[pd.DataFrame] = []
     for label_key in LABEL_DICT:
@@ -65,7 +65,7 @@ def load_50_000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("i
     return synthetic_time_series
 
 
-def load_100_000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_100_000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
     """Load the synthetic 100,000 profiles per type (500,000 total)."""
     df_list: List[pd.DataFrame] = []
     for label_key in LABEL_DICT:
@@ -78,7 +78,7 @@ def load_100_000_synthetic_profiles_per_type(path: pathlib.Path = pathlib.Path("
     return synthetic_time_series
 
 
-def load_synthetic_profiles_in_originial_shape(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_synthetic_profiles_in_originial_shape(path: pathlib.Path) -> pd.DataFrame:
     """Load the synthetic profiles in their original shape (1,300 profiles)."""
     df_list: List[pd.DataFrame] = []
     for label_key in LABEL_DICT:
@@ -94,23 +94,23 @@ def load_synthetic_profiles_in_originial_shape(path: pathlib.Path = pathlib.Path
     return synthetic_time_series
 
 
-def load_1300_unlabeled_synthetic_profiles(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_1300_unlabeled_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the 1,300 unlabeled synthetic profiles."""
     return pd.read_parquet(path / "1300_profiles_all.parquet")
 
 
-def load_real_data(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_real_data(path: pathlib.Path) -> pd.DataFrame:
     """Load the real Fluvius data."""
     csv_path = path / "fluvius_wide_format.csv"
     return pd.read_csv(csv_path, sep=get_sep(csv_path), index_col=0)
 
 
-def load_1300_synthetic_profiles(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_1300_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the labeled 1,300 synthetic profiles."""
     return pd.read_parquet(path / "1300_profiles_all.parquet")
 
 
-def load_10_000_synthetic_profiles(path: pathlib.Path = pathlib.Path("input_data")) -> pd.DataFrame:
+def load_10_000_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the labeled 10,000 synthetic profiles."""
     return pd.read_parquet(path / "10000_profiles_all.parquet")
 
