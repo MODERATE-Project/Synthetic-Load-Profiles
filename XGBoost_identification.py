@@ -11,7 +11,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import time
-import os
 import json
 import pickle
 import argparse
@@ -257,11 +256,11 @@ def load_model(model_name=DEFAULT_MODEL_NAME):
     label_encoder = joblib.load(encoder_path)
     
     # Load classification report - try pickle first, fall back to JSON for backwards compatibility
-    report_path_json = os.path.join(MODEL_DIR, f"{model_name}_classification_report.json")
-    if os.path.exists(report_path):
+    report_path_json = MODEL_DIR / f"{model_name}_classification_report.json"
+    if report_path.exists():
         with open(report_path, 'rb') as f:
             classification_report_dict = pickle.load(f)
-    elif os.path.exists(report_path_json):
+    elif report_path_json.exists():
         with open(report_path_json, 'r') as f:
             classification_report_dict = json.load(f)
         # Optionally migrate to pickle format
@@ -272,7 +271,7 @@ def load_model(model_name=DEFAULT_MODEL_NAME):
         raise FileNotFoundError(f"Classification report file not found for {model_name}")
 
     cv_fold_metrics = None
-    if os.path.exists(cv_metrics_path):
+    if cv_metrics_path.exists():
         with open(cv_metrics_path, 'rb') as f:
             cv_fold_metrics = pickle.load(f)
     else:
@@ -337,11 +336,11 @@ def list_saved_models():
     Returns:
         list: List of model names (without file extensions)
     """
-    if not os.path.exists(MODEL_DIR):
+    if not MODEL_DIR.exists():
         print(f"Model directory '{MODEL_DIR}' does not exist.")
         return []
     
-    model_files = [f for f in os.listdir(MODEL_DIR) if f.endswith('_model.joblib')]
+    model_files = [f for f in MODEL_DIR.iterdir() if f.endswith('_model.joblib')]
     model_names = [f.replace('_model.joblib', '') for f in model_files]
     
     if model_names:
@@ -690,7 +689,7 @@ def calculate_features_cached(labels_df, time_series, scenario_name, cache_key=N
 
 def clear_disk_feature_cache():
     """Clear all cached features from disk."""
-    if not os.path.exists(FEATURE_CACHE_DIR):
+    if not FEATURE_CACHE_DIR.exists():
         print("📁 Feature cache directory doesn't exist")
         return
     
@@ -703,13 +702,13 @@ def clear_disk_feature_cache():
 
 def list_cached_features():
     """List all cached features on disk."""
-    if not os.path.exists(FEATURE_CACHE_DIR):
+    if not FEATURE_CACHE_DIR.exists():
         print(f"📁 Feature cache directory '{FEATURE_CACHE_DIR}' does not exist")
         return []
     
     # Get both new (.pkl) and old (.joblib) cache files
-    cache_files_pkl = [f for f in os.listdir(FEATURE_CACHE_DIR) if f.endswith('_features.pkl')]
-    cache_files_joblib = [f for f in os.listdir(FEATURE_CACHE_DIR) if f.endswith('_features.joblib')]
+    cache_files_pkl = [f for f in FEATURE_CACHE_DIR.iterdir() if f.endswith('_features.pkl')]
+    cache_files_joblib = [f for f in FEATURE_CACHE_DIR.iterdir() if f.endswith('_features.joblib')]
     
     cache_keys_pkl = [f.replace('_features.pkl', '') for f in cache_files_pkl]
     cache_keys_joblib = [f.replace('_features.joblib', '') for f in cache_files_joblib]
@@ -722,24 +721,24 @@ def list_cached_features():
         for key in cache_keys:
             try:
                 metadata_path = get_feature_metadata_path(key)
-                metadata_path_json = os.path.join(FEATURE_CACHE_DIR, f"{key}_metadata.json")
+                metadata_path_json = FEATURE_CACHE_DIR / f"{key}_metadata.json"
                 
                 # Determine file format
                 feature_path_pkl = get_feature_cache_path(key)
-                feature_path_joblib = os.path.join(FEATURE_CACHE_DIR, f"{key}_features.joblib")
+                feature_path_joblib = FEATURE_CACHE_DIR / f"{key}_features.joblib"
                 
-                if os.path.exists(feature_path_pkl):
+                if feature_path_pkl.exists():
                     format_type = "pickle"
-                elif os.path.exists(feature_path_joblib):
+                elif feature_path_joblib.exists():
                     format_type = "joblib (legacy)"
                 else:
                     format_type = "unknown"
                 
-                if os.path.exists(metadata_path):
+                if metadata_path.exists():
                     with open(metadata_path, 'rb') as f:
                         metadata = pickle.load(f)
                     print(f"  - {key}: {metadata['feature_shape']} features, cached {time.ctime(metadata['timestamp'])} ({format_type})")
-                elif os.path.exists(metadata_path_json):
+                elif metadata_path_json.exists():
                     with open(metadata_path_json, 'r') as f:
                         metadata = json.load(f)
                     print(f"  - {key}: {metadata['feature_shape']} features, cached {time.ctime(metadata['timestamp'])} ({format_type})")
@@ -752,55 +751,6 @@ def list_cached_features():
     
     return cache_keys
 
-def demo_feature_caching():
-    """
-    Demonstration function showing the feature caching capabilities.
-    """
-    print("\n" + "="*70)
-    print("FEATURE CACHING DEMO")
-    print("="*70)
-    
-    print("\n1. Feature Caching System Overview:")
-    print("   • Disk caching for persistence across script runs")
-    print("   • Automatic data validation and cache invalidation")
-    print("   • Significant time savings for large datasets")
-    
-    print("\n2. Available cached features:")
-    cached_features = list_cached_features()
-    
-    print("\n3. Usage Examples:")
-    print("   # Basic usage (auto-caching):")
-    print("   X, y = calculate_features_cached(labels_df, time_series, 'my_dataset')")
-    print()
-    print("   # Force recalculation:")
-    print("   X, y = calculate_features_cached(labels_df, time_series, 'my_dataset', force_recalculate=True)")
-    print()
-    print("   # Check if features are cached:")
-    print("   if feature_cache_exists('my_dataset'):")
-    print("       print('Features are already cached!')")
-    
-    print("\n4. Cache Management:")
-    print("   # Get cache info:")
-    print("   get_cache_info('my_dataset')")
-    print()
-    print("   # Clear disk cache:")
-    print("   clear_disk_feature_cache()")
-    
-    print("\n5. Command Line Usage:")
-    print("   python use_XGBoost.py                           # Use cached features")
-    print("   python use_XGBoost.py --force-recalculate-features  # Force recalculation")
-    print("   python use_XGBoost.py --list-cached-features    # List all cached features") 
-    print("   python use_XGBoost.py --clear-feature-cache     # Clear all cached features from disk")
-    print("   python use_XGBoost.py --cache-info real_data    # Get info about specific cache")
-    
-    print("\n6. Performance Benefits:")
-    print("   • First run: Calculates and saves features (slow)")
-    print("   • Subsequent runs: Loads features from disk (fast)")
-    print("   • Typical speedup: 10-100x for large datasets")
-    print("   • Automatic validation ensures data integrity")
-    
-    print("="*70)
-
 
 def get_cache_info(cache_key):
     """Get detailed information about a cached feature set."""
@@ -810,20 +760,20 @@ def get_cache_info(cache_key):
     
     try:
         metadata_path = get_feature_metadata_path(cache_key)
-        metadata_path_json = os.path.join(FEATURE_CACHE_DIR, f"{cache_key}_metadata.json")
+        metadata_path_json = FEATURE_CACHE_DIR / f"{cache_key}_metadata.json"
         
         # Try pickle first, fall back to JSON for backwards compatibility
-        if os.path.exists(metadata_path):
+        if metadata_path.exists():
             with open(metadata_path, 'rb') as f:
                 metadata = pickle.load(f)
-        elif os.path.exists(metadata_path_json):
+        elif metadata_path_json.exists():
             with open(metadata_path_json, 'r') as f:
                 metadata = json.load(f)
         else:
             raise FileNotFoundError(f"Metadata file not found for {cache_key}")
         
         feature_path = get_feature_cache_path(cache_key)
-        file_size = os.path.getsize(feature_path) / (1024 * 1024)  # MB
+        file_size = feature_path.stat().st_size / (1024 * 1024)  # MB
         
         print(f"📊 Cache info for '{cache_key}':")
         print(f"   Features shape: {metadata['feature_shape']}")
@@ -2315,7 +2265,7 @@ def create_category_feature_statistics_plots(
     """
     Generate statistical comparison plots per category between real and synthetic profiles.
     """
-    os.makedirs(save_dir, exist_ok=True)
+    save_dir.mkdir(parents=True, exist_ok=True)
 
     real_category_arrays = slice_time_series_by_category(real_time_series, real_labels_df)
     synth_category_arrays = slice_time_series_by_category(synthetic_time_series, synthetic_labels_df)
@@ -2352,10 +2302,7 @@ def create_category_feature_statistics_plots(
             title=f"{category} Statistical Feature Comparison",
         )
 
-        output_path = os.path.join(
-            save_dir,
-            f"stat_feature_comparison_{category}_{scenario_tag}.svg",
-        )
+        output_path = save_dir / f"stat_feature_comparison_{category}_{scenario_tag}.svg"
         fig.savefig(output_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close(fig)
         print(f"✅ Statistical comparison for category '{category}' saved to: {output_path}")
