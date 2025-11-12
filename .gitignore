@@ -24,3 +24,7 @@ wandb/
 *.parquet
 
 !readme/Example_CSV_structure.png
+/paper_figures
+/identification_models
+/synthetic_data
+/figures
