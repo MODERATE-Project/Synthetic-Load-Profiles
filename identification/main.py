@@ -104,7 +104,7 @@ def main(scenario_name: str, force_retrain: bool = False, force_recalculate_feat
     print("\n" + "=" * 70)
     print("Creating statistical feature comparisons for each category...")
     print("=" * 70)
-    synthetic_time_series_original = load_synthetic_profiles_in_originial_shape()
+    synthetic_time_series_original = load_synthetic_profiles_in_originial_shape(PROJECT_ROOT / "synthetic_data")
     synthetic_labels_original = create_labels_for_original_shape_synthetic_profiles()
     create_category_feature_statistics_plots(
         real_time_series,
@@ -147,7 +147,7 @@ def main(scenario_name: str, force_retrain: bool = False, force_recalculate_feat
         y_real,
         real_labels_df,
         real_time_series,
-        save_path=FIGURE_DIR / f"label_distribution_comparison_{scenario_name}.svg",
+        save_path=FIGURE_DIR,
         scenario_name=scenario_name,
         force_retrain=force_retrain,
     )

@@ -184,12 +184,9 @@ def calculate_features_optimized(labels_df: pd.DataFrame, time_series: pd.DataFr
         max_.index = [f"{prefix}_max_{i}" for i in range(n_periods)]
         peak_to_avg.index = [f"{prefix}_peak_to_avg_{i}" for i in range(n_periods)]
 
-        if "sum" in scenario_name:
-            sum_ = resampled.sum()
-            sum_.index = [f"{prefix}_sum_{i}" for i in range(n_periods)]
-            features = pd.concat([mean, std, skew_values, max_, sum_, peak_to_avg], axis=0)
-        else:
-            features = pd.concat([mean, std, skew_values, max_, peak_to_avg], axis=0)
+        sum_ = resampled.sum()
+        sum_.index = [f"{prefix}_sum_{i}" for i in range(n_periods)]
+        features = pd.concat([mean, std, skew_values, max_, sum_, peak_to_avg], axis=0)
 
         features = features.reset_index().rename(columns={"index": "feature"})
         return features

@@ -105,28 +105,28 @@ if __name__ == '__main__':
 
     # train full model on all data
     train_data, test_data = split_data_train_test(inputFile, labels_file=labels_file, train_ratio=0.8, random_state=42)
-    # run(params, MODEL_TYPE, PROJECT_NAME, 
-    #     train_data=train_data, 
-    #     logStats=LOG_STATS, 
-    #     useWandb=USE_WANDB, 
-    #     modelPath=MODEL_PATH, 
-    #     createData=CREATE_DATA, 
-    #     useMarimo=False,
-    #     generate_n_profiles = 1300, 
-    #     test_data=test_data)
+    run(params, MODEL_TYPE, PROJECT_NAME, 
+        train_data=train_data, 
+        logStats=LOG_STATS, 
+        useWandb=USE_WANDB, 
+        modelPath=MODEL_PATH, 
+        createData=True, 
+        useMarimo=False,
+        generate_n_profiles = 50_000, 
+        test_data=test_data)
     
     # generate differet data sizes from each submodel (trained on the different subgroups and on the full data)
-    for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
-        for model_path in create_data_paths:
-            run(params, 
-                MODEL_TYPE, 
-                PROJECT_NAME, 
-                train_data=train_data, 
-                logStats=LOG_STATS, 
-                useWandb=USE_WANDB, 
-                modelPath=model_path, 
-                createData=True, 
-                useMarimo=False,
-                generate_n_profiles = generation_nr, 
-                test_data=test_data)
+    # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
+    #     for model_path in create_data_paths:
+    #         run(params, 
+    #             MODEL_TYPE, 
+    #             PROJECT_NAME, 
+    #             train_data=train_data, 
+    #             logStats=LOG_STATS, 
+    #             useWandb=USE_WANDB, 
+    #             modelPath=model_path, 
+    #             createData=True, 
+    #             useMarimo=False,
+    #             generate_n_profiles = generation_nr, 
+    #             test_data=test_data)
     

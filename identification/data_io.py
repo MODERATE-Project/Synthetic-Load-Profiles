@@ -102,7 +102,9 @@ def load_1300_unlabeled_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
 def load_real_data(path: pathlib.Path) -> pd.DataFrame:
     """Load the real Fluvius data."""
     csv_path = path / "fluvius_wide_format.csv"
-    return pd.read_csv(csv_path, sep=get_sep(csv_path), index_col=0)
+    df = pd.read_csv(csv_path, sep=get_sep(csv_path), index_col=0)
+    df.columns = [i for i in range(1, df.shape[1] + 1)]
+    return df
 
 
 def load_1300_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
