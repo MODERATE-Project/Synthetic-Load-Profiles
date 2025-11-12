@@ -514,4 +514,87 @@ def identify_sensitive_profiles(
 
     return flagged_ids, detail_df
 
-    
+# MMD similarity calculation   
+def _prepare_numeric_matrix(
+    df: pd.DataFrame,
+    max_samples: int = 512,
+    random_state: int = 42,
+    samples_axis: str = "rows",
+) -> np.ndarray:
+    """
+    Helper that keeps only numeric columns and (optionally) downsamples rows for cheap toy examples.
+    """
+    numeric_df = df.select_dtypes(include=[np.number])
+    if numeric_df.empty:
+        raise ValueError("Provided DataFrame does not contain numeric columns for MMD calculation.")
+
+    numeric = numeric_df.to_numpy(dtype=np.float64, copy=True)
+    if samples_axis == "columns":
+        numeric = numeric.T
+    elif samples_axis != "rows":
+        raise ValueError("samples_axis must be either 'rows' or 'columns'.")
+
+    numeric = np.nan_to_num(numeric, copy=False)
+
+    if numeric.size == 0:
+        raise ValueError("Provided DataFrame does not contain numeric columns for MMD calculation.")
+
+    if max_samples and numeric.shape[0] > max_samples:
+        rng = np.random.default_rng(random_state)
+        idx = rng.choice(numeric.shape[0], size=max_samples, replace=False)
+        numeric = numeric[idx]
+    return numeric
+
+
+def _median_bandwidth(*arrays: np.ndarray, max_pairs: int = 5000) -> float:
+    """
+    Simple median heuristic for RBF bandwidth; samples pairwise distances to stay lightweight.
+    """
+    stacked = np.vstack(arrays)
+    if stacked.shape[0] < 2:
+        return 1.0
+
+    rng = np.random.default_rng(42)
+    total_pairs = stacked.shape[0] * (stacked.shape[0] - 1) // 2
+    num_pairs = min(max_pairs, total_pairs)
+    idx_i = rng.choice(stacked.shape[0], size=num_pairs, replace=True)
+    idx_j = rng.choice(stacked.shape[0], size=num_pairs, replace=True)
+    valid = idx_i != idx_j
+    diffs = stacked[idx_i[valid]] - stacked[idx_j[valid]]
+    dists = np.sqrt((diffs ** 2).sum(axis=1))
+    bw = np.median(dists)
+    return float(bw if bw > 0 else 1.0)
+
+
+def _rbf_kernel(a: np.ndarray, b: np.ndarray, bandwidth: float) -> np.ndarray:
+    """
+    Compute the RBF kernel matrix between two matrices.
+    """
+    sq_norms_a = (a ** 2).sum(axis=1, keepdims=True)
+    sq_norms_b = (b ** 2).sum(axis=1, keepdims=True).T
+    sq_dists = sq_norms_a - 2 * a @ b.T + sq_norms_b
+    gamma = 1.0 / (2 * bandwidth ** 2)
+    return np.exp(-gamma * sq_dists)
+
+
+def _unbiased_mmd2(a: np.ndarray, b: np.ndarray, bandwidth: float) -> float:
+    """
+    Unbiased MMD^2 estimator with an RBF kernel.
+    """
+    if a.shape[0] < 2 or b.shape[0] < 2:
+        raise ValueError("Need at least two samples per dataset for MMD.")
+
+    k_xx = _rbf_kernel(a, a, bandwidth)
+    k_yy = _rbf_kernel(b, b, bandwidth)
+    k_xy = _rbf_kernel(a, b, bandwidth)
+
+    np.fill_diagonal(k_xx, 0.0)
+    np.fill_diagonal(k_yy, 0.0)
+
+    m = a.shape[0]
+    n = b.shape[0]
+    term_xx = k_xx.sum() / (m * (m - 1))
+    term_yy = k_yy.sum() / (n * (n - 1))
+    term_xy = k_xy.mean()
+
+    return float(term_xx + term_yy - 2 * term_xy)

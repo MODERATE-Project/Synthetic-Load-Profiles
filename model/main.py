@@ -576,7 +576,7 @@ def generate_data_from_saved_model(
     train_data: pd.DataFrame,
     test_data: pd.DataFrame,
     max_pool_attempts: int = 5,
-):
+) -> dict:
     try:
         modelStatePath = pathlib.Path(modelStatePath)
         modelState = torch.load(modelStatePath, weights_only = False)

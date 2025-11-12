@@ -8,7 +8,15 @@ import pandas as pd
 from pathlib import Path
 import re
 import json
-from model.utils import compute_trends, calc_features, composite_metric, compute_cosine_similarity_matrix
+from typing import Optional
+from model.utils import (compute_trends, 
+calc_features, 
+composite_metric, 
+compute_cosine_similarity_matrix,
+_prepare_numeric_matrix,
+_median_bandwidth,
+_unbiased_mmd2
+)
 from model.plots import plot_similarity_boxplot
 
 
@@ -184,6 +192,68 @@ def plot_similarity_scores(
     output_path.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path / filename, bbox_inches="tight", dpi=300)
     plt.close(fig)
+
+
+############################################################################################
+
+
+def plot_mmd(
+    synthetic_df: pd.DataFrame,
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    max_samples: int = 1300,
+    bandwidth: Optional[float] = None,
+):
+    """
+    Create a tiny bar chart that visualises squared MMD values between three datasets.
+
+    Parameters
+    ----------
+    synthetic_df, train_df, test_df:
+        DataFrames containing the synthetic, train and hold-out samples (numeric columns only).
+    max_samples:
+        Optional cap on rows pulled from each DataFrame to keep the demo lightweight.
+    bandwidth:
+        RBF bandwidth; if None, a median heuristic over the stacked samples is used.
+    title:
+        Plot title.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+        The resulting bar-plot figure.
+    """
+    common_index = synthetic_df.index.intersection(train_df.index).intersection(test_df.index)
+    if common_index.empty:
+        raise ValueError("Synthetic, train, and test data must share at least one common timestamp/index entry for MMD.")
+
+    common_index = common_index.sort_values()
+    synth_df = synthetic_df.loc[common_index]
+    train_df_aligned = train_df.loc[common_index]
+    test_df_aligned = test_df.loc[common_index]
+
+    synth = _prepare_numeric_matrix(synth_df, max_samples=max_samples, samples_axis="columns")
+    train = _prepare_numeric_matrix(train_df_aligned, max_samples=max_samples, samples_axis="columns")
+    test = _prepare_numeric_matrix(test_df_aligned, max_samples=max_samples, samples_axis="columns")
+
+    bw = bandwidth or _median_bandwidth(synth, train, test)
+
+    mmd_synth_train = _unbiased_mmd2(synth, train, bw)
+    mmd_synth_test = _unbiased_mmd2(synth, test, bw)
+    mmd_train_test = _unbiased_mmd2(train, test, bw)
+
+    fig, ax = plt.subplots(figsize=(6, 4))
+    labels = ["Synthetic vs Train", "Synthetic vs Test", "Train vs Test"]
+    values = [mmd_synth_train, mmd_synth_test, mmd_train_test]
+
+    sns.barplot(x=labels, y=values, palette="viridis", ax=ax)
+    ax.set_ylabel("MMD$^2$")
+    ax.set_xticklabels(labels, rotation=20, ha="right")
+    for idx, val in enumerate(values):
+        ax.text(idx, val, f"{val:.3g}", ha="center", va="bottom", fontweight="bold")
+
+    plt.tight_layout()
+    return fig
 
 
 ############################################################################################
