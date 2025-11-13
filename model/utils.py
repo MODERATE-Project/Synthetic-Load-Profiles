@@ -598,3 +598,31 @@ def _unbiased_mmd2(a: np.ndarray, b: np.ndarray, bandwidth: float) -> float:
     term_xy = k_xy.mean()
 
     return float(term_xx + term_yy - 2 * term_xy)
+
+
+def run_mmd_permutation_test(
+    a: np.ndarray,
+    b: np.ndarray,
+    bandwidth: float,
+    n_permutations: int = 200,
+    random_state: int = 42,
+) -> Tuple[float, np.ndarray]:
+    """
+    Compute observed MMD^2 along with a permutation distribution for quick uncertainty checks.
+    """
+    if n_permutations <= 0:
+        observed = _unbiased_mmd2(a, b, bandwidth)
+        return observed, np.array([], dtype=float)
+
+    rng = np.random.default_rng(random_state)
+    observed = _unbiased_mmd2(a, b, bandwidth)
+
+    combined = np.vstack([a, b]).copy()
+    n_a = a.shape[0]
+    permuted = np.empty(n_permutations, dtype=float)
+
+    for idx in range(n_permutations):
+        rng.shuffle(combined, axis=0)
+        permuted[idx] = _unbiased_mmd2(combined[:n_a], combined[n_a:], bandwidth)
+
+    return observed, permuted

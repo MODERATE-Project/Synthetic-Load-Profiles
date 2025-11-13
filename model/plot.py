@@ -8,14 +8,15 @@ import pandas as pd
 from pathlib import Path
 import re
 import json
-from typing import Optional
-from model.utils import (compute_trends, 
-calc_features, 
-composite_metric, 
-compute_cosine_similarity_matrix,
-_prepare_numeric_matrix,
-_median_bandwidth,
-_unbiased_mmd2
+from typing import List, Optional
+from model.utils import (
+    compute_trends,
+    calc_features,
+    composite_metric,
+    compute_cosine_similarity_matrix,
+    _prepare_numeric_matrix,
+    _median_bandwidth,
+    run_mmd_permutation_test,
 )
 from model.plots import plot_similarity_boxplot
 
@@ -203,25 +204,29 @@ def plot_mmd(
     test_df: pd.DataFrame,
     max_samples: int = 1300,
     bandwidth: Optional[float] = None,
+    n_permutations: int = 200,
+    random_state: int = 42,
 ):
     """
-    Create a tiny bar chart that visualises squared MMD values between three datasets.
+    Visualise squared MMD along with permutation envelopes for synthetic/train/test subsets.
 
     Parameters
     ----------
     synthetic_df, train_df, test_df:
         DataFrames containing the synthetic, train and hold-out samples (numeric columns only).
     max_samples:
-        Optional cap on rows pulled from each DataFrame to keep the demo lightweight.
+        Optional cap on columns pulled from each DataFrame to keep the demo lightweight.
     bandwidth:
         RBF bandwidth; if None, a median heuristic over the stacked samples is used.
-    title:
-        Plot title.
+    n_permutations:
+        Number of permutation rounds per comparison (set to 0 to skip boxplots).
+    random_state:
+        Seed controlling the optional down-sampling and permutation shuffles.
 
     Returns
     -------
     matplotlib.figure.Figure
-        The resulting bar-plot figure.
+        The resulting figure.
     """
     common_index = synthetic_df.index.intersection(train_df.index).intersection(test_df.index)
     if common_index.empty:
@@ -232,25 +237,91 @@ def plot_mmd(
     train_df_aligned = train_df.loc[common_index]
     test_df_aligned = test_df.loc[common_index]
 
-    synth = _prepare_numeric_matrix(synth_df, max_samples=max_samples, samples_axis="columns")
-    train = _prepare_numeric_matrix(train_df_aligned, max_samples=max_samples, samples_axis="columns")
-    test = _prepare_numeric_matrix(test_df_aligned, max_samples=max_samples, samples_axis="columns")
+    synth = _prepare_numeric_matrix(
+        synth_df, max_samples=max_samples, samples_axis="columns", random_state=random_state
+    )
+    train = _prepare_numeric_matrix(
+        train_df_aligned, max_samples=max_samples, samples_axis="columns", random_state=random_state
+    )
+    test = _prepare_numeric_matrix(
+        test_df_aligned, max_samples=max_samples, samples_axis="columns", random_state=random_state
+    )
 
     bw = bandwidth or _median_bandwidth(synth, train, test)
 
-    mmd_synth_train = _unbiased_mmd2(synth, train, bw)
-    mmd_synth_test = _unbiased_mmd2(synth, test, bw)
-    mmd_train_test = _unbiased_mmd2(train, test, bw)
+    comparisons = [
+        ("Synthetic vs Train", synth, train),
+        ("Synthetic vs Test", synth, test),
+        ("Train vs Test", train, test),
+    ]
+
+    observed_values = []
+    permutation_frames = []
+    p_values: List[Optional[float]] = []
+    for idx, (label, left, right) in enumerate(comparisons):
+        observed, perm = run_mmd_permutation_test(
+            left,
+            right,
+            bw,
+            n_permutations=n_permutations,
+            random_state=random_state + idx,
+        )
+        observed_values.append(observed)
+        if perm.size:
+            p_val = (np.count_nonzero(perm >= observed) + 1) / (perm.size + 1)
+            p_values.append(p_val)
+        else:
+            p_values.append(None)
+        if perm.size:
+            permutation_frames.append(pd.DataFrame({"comparison": label, "value": perm}))
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    labels = ["Synthetic vs Train", "Synthetic vs Test", "Train vs Test"]
-    values = [mmd_synth_train, mmd_synth_test, mmd_train_test]
+    labels = [label for label, *_ in comparisons]
 
-    sns.barplot(x=labels, y=values, palette="viridis", ax=ax)
+    if permutation_frames:
+        perm_df = pd.concat(permutation_frames, ignore_index=True)
+        sns.boxplot(
+            data=perm_df,
+            x="comparison",
+            y="value",
+            order=labels,
+            ax=ax,
+            width=0.5,
+            boxprops={"facecolor": "white", "edgecolor": "black"},
+            whiskerprops={"color": "black"},
+            capprops={"color": "black"},
+            medianprops={"color": "black"},
+            fliersize=2,
+        )
+    else:
+        ax.bar(labels, observed_values, color="lightgray", edgecolor="black", alpha=0.7)
+
     ax.set_ylabel("MMD$^2$")
-    ax.set_xticklabels(labels, rotation=20, ha="right")
-    for idx, val in enumerate(values):
-        ax.text(idx, val, f"{val:.3g}", ha="center", va="bottom", fontweight="bold")
+
+    tick_positions = ax.get_xticks()
+    for idx, (pos, obs) in enumerate(zip(tick_positions, observed_values)):
+        ax.scatter(
+            pos,
+            obs,
+            color="crimson",
+            marker="D",
+            s=60,
+            label="Observed MMD$^2$" if idx == 0 else None,
+        )
+        ax.text(pos, obs, f"{obs:.3g}", ha="center", va="bottom", fontweight="bold")
+
+    handles, legend_labels = ax.get_legend_handles_labels()
+    if handles:
+        ax.legend(handles, legend_labels, loc="best")
+
+    formatted_labels = []
+    for label, p_val in zip(labels, p_values):
+        if p_val is not None:
+            formatted_labels.append(f"{label}\n(p={p_val:.3f})")
+        else:
+            formatted_labels.append(label)
+
+    ax.set_xticklabels(formatted_labels, rotation=15, ha="right")
 
     plt.tight_layout()
     return fig

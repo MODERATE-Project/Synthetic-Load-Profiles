@@ -22,6 +22,9 @@ wandb/
 *.zip
 *.pkl
 *.parquet
+*.svg
+*.png
+
 
 !readme/Example_CSV_structure.png
 /paper_figures
