@@ -23,7 +23,9 @@ def get_sep(path: pathlib.Path) -> str:
 
 def load_10_000_unlabeled_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the 10,000 unlabeled synthetic profiles."""
-    return pd.read_parquet(path / "10000_profiles_all.parquet")
+    df = pd.read_parquet(path / "10000_profiles_all.parquet")
+    df.columns = np.arange(0, df.shape[1])
+    return df
 
 
 def load_synthetic_1000_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
@@ -34,7 +36,7 @@ def load_synthetic_1000_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
         df_list.append(df)
 
     synthetic_time_series = pd.concat(df_list, axis=1)
-    synthetic_time_series.columns = np.arange(1, 5_001)
+    synthetic_time_series.columns = np.arange(0, 5_000)
     synthetic_time_series.index = pd.to_datetime(synthetic_time_series.index)
     return synthetic_time_series
 
@@ -47,7 +49,7 @@ def load_5000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
         df_list.append(df)
 
     synthetic_time_series = pd.concat(df_list, axis=1)
-    synthetic_time_series.columns = np.arange(1, synthetic_time_series.shape[1] + 1)
+    synthetic_time_series.columns = np.arange(0, synthetic_time_series.shape[1])
     synthetic_time_series.index = pd.to_datetime(synthetic_time_series.index)
     return synthetic_time_series
 
@@ -60,7 +62,7 @@ def load_50_000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame:
         df_list.append(df)
 
     synthetic_time_series = pd.concat(df_list, axis=1)
-    synthetic_time_series.columns = np.arange(1, synthetic_time_series.shape[1] + 1)
+    synthetic_time_series.columns = np.arange(0, synthetic_time_series.shape[1])
     synthetic_time_series.index = pd.to_datetime(synthetic_time_series.index)
     return synthetic_time_series
 
@@ -73,7 +75,7 @@ def load_100_000_synthetic_profiles_per_type(path: pathlib.Path) -> pd.DataFrame
         df_list.append(df)
 
     synthetic_time_series = pd.concat(df_list, axis=1)
-    synthetic_time_series.columns = np.arange(1, synthetic_time_series.shape[1] + 1)
+    synthetic_time_series.columns = np.arange(0, synthetic_time_series.shape[1])
     synthetic_time_series.index = pd.to_datetime(synthetic_time_series.index)
     return synthetic_time_series
 
@@ -89,50 +91,55 @@ def load_synthetic_profiles_in_originial_shape(path: pathlib.Path) -> pd.DataFra
         df_list.append(df)
 
     synthetic_time_series = pd.concat(df_list, axis=1)
-    synthetic_time_series.columns = np.arange(1, 1_301)
+    synthetic_time_series.columns = np.arange(0, 1_300)
     synthetic_time_series.index = pd.to_datetime(synthetic_time_series.index)
     return synthetic_time_series
 
 
 def load_1300_unlabeled_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the 1,300 unlabeled synthetic profiles."""
-    return pd.read_parquet(path / "1300_profiles_all.parquet")
+    df = pd.read_parquet(path / "1300_profiles_all.parquet")
+    df.columns = np.arange(0, df.shape[1])
+    return df
 
 
 def load_real_data(path: pathlib.Path) -> pd.DataFrame:
     """Load the real Fluvius data."""
     csv_path = path / "fluvius_wide_format.csv"
     df = pd.read_csv(csv_path, sep=get_sep(csv_path), index_col=0)
-    df.columns = [i for i in range(1, df.shape[1] + 1)]
     return df
 
 
 def load_1300_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the labeled 1,300 synthetic profiles."""
-    return pd.read_parquet(path / "1300_profiles_all.parquet")
+    df = pd.read_parquet(path / "1300_profiles_all.parquet")
+    df.columns = np.arange(0, df.shape[1])
+    return df
 
 
 def load_10_000_synthetic_profiles(path: pathlib.Path) -> pd.DataFrame:
     """Load the labeled 10,000 synthetic profiles."""
-    return pd.read_parquet(path / "10000_profiles_all.parquet")
+    df = pd.read_parquet(path / "10000_profiles_all.parquet")
+    df.columns = np.arange(0, df.shape[1])
+    return df
 
 
 def create_1000_labels_df() -> pd.DataFrame:
     labels = [1000 * [label] for label in LABEL_DICT.values()]
     flat_list = [item for sublist in labels for item in sublist]
-    return pd.DataFrame({"Category": flat_list, "ID": np.arange(1, 5_001)})
+    return pd.DataFrame({"Category": flat_list, "ID": np.arange(0, 5_000)})
 
 
 def create_labels_for_50_000_labels_df() -> pd.DataFrame:
     labels = [50_000 * [label] for label in LABEL_DICT.values()]
     flat_list = [item for sublist in labels for item in sublist]
-    return pd.DataFrame({"Category": flat_list, "ID": np.arange(1, 250_001)})
+    return pd.DataFrame({"Category": flat_list, "ID": np.arange(0, 250_000)})
 
 
 def create_labels_for_100_000_labels_df() -> pd.DataFrame:
     labels = [100_000 * [label] for label in LABEL_DICT.values()]
     flat_list = [item for sublist in labels for item in sublist]
-    return pd.DataFrame({"Category": flat_list, "ID": np.arange(1, 500_001)})
+    return pd.DataFrame({"Category": flat_list, "ID": np.arange(0, 500_000)})
 
 
 def create_labels_for_original_shape_synthetic_profiles() -> pd.DataFrame:
@@ -144,10 +151,10 @@ def create_labels_for_original_shape_synthetic_profiles() -> pd.DataFrame:
             labels.append(300 * [label_value])
 
     flat_list = [item for sublist in labels for item in sublist]
-    return pd.DataFrame({"Category": flat_list, "ID": np.arange(1, 1_301)})
+    return pd.DataFrame({"Category": flat_list, "ID": np.arange(0, 1_300)})
 
 
 def create_labels_for_5000_synthetic_profiles_per_type() -> pd.DataFrame:
     labels = [5000 * [label] for label in LABEL_DICT.values()]
     flat_list = [item for sublist in labels for item in sublist]
-    return pd.DataFrame({"Category": flat_list, "ID": np.arange(1, 25_001)})
+    return pd.DataFrame({"Category": flat_list, "ID": np.arange(0, 25_000)})

@@ -2,13 +2,15 @@ import matplotlib
 from pyarrow.fs import finalize_s3
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import seaborn as sns
 import numpy as np
 import pandas as pd
 from pathlib import Path
 import re
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from model.utils import (
     compute_trends,
     calc_features,
@@ -198,6 +200,50 @@ def plot_similarity_scores(
 ############################################################################################
 
 
+def _compute_mmd_permutation_stats(
+    left: np.ndarray,
+    right: np.ndarray,
+    bandwidth: float,
+    n_permutations: int,
+    random_state: int,
+) -> Tuple[float, Optional[float], np.ndarray]:
+    """
+    Helper that returns observed MMD^2, its permutation-based p-value, and the permutation samples.
+    """
+    observed, perm = run_mmd_permutation_test(
+        left,
+        right,
+        bandwidth,
+        n_permutations=n_permutations,
+        random_state=random_state,
+    )
+    p_value: Optional[float] = None
+    if perm.size:
+        p_value = (np.count_nonzero(perm >= observed) + 1) / (perm.size + 1)
+    return observed, p_value, perm
+
+
+def _draw_permutation_box(ax: plt.Axes, values: np.ndarray, position: float, facecolor: str) -> None:
+    """
+    Draw a single permutation boxplot at the specified axis position.
+    """
+    if values.size == 0:
+        return
+
+    box = ax.boxplot(
+        values,
+        positions=[position],
+        widths=0.18,
+        patch_artist=True,
+        showfliers=False,
+    )
+
+    plt.setp(box["boxes"], facecolor=facecolor, edgecolor="black")
+    plt.setp(box["whiskers"], color="black")
+    plt.setp(box["caps"], color="black")
+    plt.setp(box["medians"], color="black")
+
+
 def plot_mmd(
     synthetic_df: pd.DataFrame,
     train_df: pd.DataFrame,
@@ -206,6 +252,7 @@ def plot_mmd(
     bandwidth: Optional[float] = None,
     n_permutations: int = 200,
     random_state: int = 42,
+    synthetic_df_non_private: Optional[pd.DataFrame] = None,
 ):
     """
     Visualise squared MMD along with permutation envelopes for synthetic/train/test subsets.
@@ -222,6 +269,9 @@ def plot_mmd(
         Number of permutation rounds per comparison (set to 0 to skip boxplots).
     random_state:
         Seed controlling the optional down-sampling and permutation shuffles.
+    synthetic_df_non_private:
+        Optional second synthetic dataset without privacy filtering. When provided, grouped boxplots
+        compare both synthetic variants against the same train/test splits.
 
     Returns
     -------
@@ -236,10 +286,29 @@ def plot_mmd(
     synth_df = synthetic_df.loc[common_index]
     train_df_aligned = train_df.loc[common_index]
     test_df_aligned = test_df.loc[common_index]
+    synth_non_private_aligned = None
+    if synthetic_df_non_private is not None:
+        synth_non_private_aligned = synthetic_df_non_private.loc[common_index]
 
-    synth = _prepare_numeric_matrix(
-        synth_df, max_samples=max_samples, samples_axis="columns", random_state=random_state
-    )
+    synth_private_label = "Synthetic (private)" if synthetic_df_non_private is not None else "Synthetic"
+    synthetic_variants: List[Tuple[str, np.ndarray]] = []
+    variant_inputs: List[Tuple[str, pd.DataFrame]] = [(synth_private_label, synth_df)]
+    if synthetic_df_non_private is not None and synth_non_private_aligned is not None:
+        variant_inputs.append(("Synthetic (non-private)", synth_non_private_aligned))
+
+    for idx, (label, df_variant) in enumerate(variant_inputs):
+        synthetic_variants.append(
+            (
+                label,
+                _prepare_numeric_matrix(
+                    df_variant,
+                    max_samples=max_samples,
+                    samples_axis="columns",
+                    random_state=random_state + idx,
+                ),
+            )
+        )
+
     train = _prepare_numeric_matrix(
         train_df_aligned, max_samples=max_samples, samples_axis="columns", random_state=random_state
     )
@@ -247,81 +316,152 @@ def plot_mmd(
         test_df_aligned, max_samples=max_samples, samples_axis="columns", random_state=random_state
     )
 
-    bw = bandwidth or _median_bandwidth(synth, train, test)
+    bandwidth_inputs = [variant for _, variant in synthetic_variants] + [train, test]
+    bw = bandwidth or _median_bandwidth(*bandwidth_inputs)
 
-    comparisons = [
-        ("Synthetic vs Train", synth, train),
-        ("Synthetic vs Test", synth, test),
-        ("Train vs Test", train, test),
-    ]
+    comparisons = []
+    for variant_label, variant_matrix in synthetic_variants:
+        comparisons.append(
+            {
+                "group": "Synthetic vs Train",
+                "variant": variant_label,
+                "left": variant_matrix,
+                "right": train,
+            }
+        )
+        comparisons.append(
+            {
+                "group": "Synthetic vs Test",
+                "variant": variant_label,
+                "left": variant_matrix,
+                "right": test,
+            }
+        )
 
-    observed_values = []
-    permutation_frames = []
-    p_values: List[Optional[float]] = []
-    for idx, (label, left, right) in enumerate(comparisons):
-        observed, perm = run_mmd_permutation_test(
-            left,
-            right,
+    comparisons.append(
+        {
+            "group": "Train vs Test",
+            "variant": "Real",
+            "left": train,
+            "right": test,
+        }
+    )
+
+    stats = []
+    for idx, comparison in enumerate(comparisons):
+        observed, p_val, perm = _compute_mmd_permutation_stats(
+            comparison["left"],
+            comparison["right"],
             bw,
-            n_permutations=n_permutations,
-            random_state=random_state + idx,
+            n_permutations,
+            random_state + idx,
         )
-        observed_values.append(observed)
-        if perm.size:
-            p_val = (np.count_nonzero(perm >= observed) + 1) / (perm.size + 1)
-            p_values.append(p_val)
-        else:
-            p_values.append(None)
-        if perm.size:
-            permutation_frames.append(pd.DataFrame({"comparison": label, "value": perm}))
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    labels = [label for label, *_ in comparisons]
-
-    if permutation_frames:
-        perm_df = pd.concat(permutation_frames, ignore_index=True)
-        sns.boxplot(
-            data=perm_df,
-            x="comparison",
-            y="value",
-            order=labels,
-            ax=ax,
-            width=0.5,
-            boxprops={"facecolor": "white", "edgecolor": "black"},
-            whiskerprops={"color": "black"},
-            capprops={"color": "black"},
-            medianprops={"color": "black"},
-            fliersize=2,
+        stats.append(
+            {
+                "group": comparison["group"],
+                "variant": comparison["variant"],
+                "observed": observed,
+                "p_value": p_val,
+                "perm_values": perm,
+            }
         )
-    else:
-        ax.bar(labels, observed_values, color="lightgray", edgecolor="black", alpha=0.7)
+
+    labels = ["Synthetic vs Train", "Synthetic vs Test", "Train vs Test"]
+    group_positions = {label: idx for idx, label in enumerate(labels)}
+
+    has_non_private = synthetic_df_non_private is not None
+    variant_offsets = {variant: 0.0 for variant, _ in synthetic_variants}
+    if has_non_private:
+        variant_offsets[synth_private_label] = -0.15
+        variant_offsets["Synthetic (non-private)"] = 0.15
+    variant_offsets["Real"] = 0.0
+
+    color_map = {variant: "#ffffff" for variant, _ in synthetic_variants}
+    if has_non_private:
+        color_map[synth_private_label] = "#ffffff"
+        color_map["Synthetic (non-private)"] = "#a8d1de"
+    color_map["Real"] = "#cef7f7"
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+
+    for stat in stats:
+        perm_values = stat["perm_values"]
+        if perm_values.size == 0:
+            continue
+        pos = group_positions[stat["group"]] + variant_offsets.get(stat["variant"], 0.0)
+        _draw_permutation_box(
+            ax,
+            perm_values,
+            position=pos,
+            facecolor=color_map.get(stat["variant"], "#ffffff"),
+        )
 
     ax.set_ylabel("MMD$^2$")
 
-    tick_positions = ax.get_xticks()
-    for idx, (pos, obs) in enumerate(zip(tick_positions, observed_values)):
+    variant_has_perm = {}
+    for stat in stats:
+        variant_has_perm.setdefault(stat["variant"], False)
+        if stat["perm_values"].size:
+            variant_has_perm[stat["variant"]] = True
+
+    observed_handle = Line2D([], [], marker="D", color="crimson", linestyle="None", label="Observed MMD$^2$")
+    legend_handles: List[object] = [observed_handle]
+    legend_labels = ["Observed MMD$^2$"]
+
+    if has_non_private:
+        if variant_has_perm.get(synth_private_label):
+            legend_handles.append(
+                Patch(facecolor=color_map[synth_private_label], edgecolor="black", label="Synthetic (private) permutations")
+            )
+            legend_labels.append("Synthetic (private) permutations")
+        if variant_has_perm.get("Synthetic (non-private)"):
+            legend_handles.append(
+                Patch(
+                    facecolor=color_map["Synthetic (non-private)"],
+                    edgecolor="black",
+                    label="Synthetic (non-private) permutations",
+                )
+            )
+            legend_labels.append("Synthetic (non-private) permutations")
+        if variant_has_perm.get("Real"):
+            legend_handles.append(
+                Patch(facecolor=color_map["Real"], edgecolor="black", label="Train vs Test permutations")
+            )
+            legend_labels.append("Train vs Test permutations")
+
+    added_observed_label = False
+    for stat in stats:
+        pos = group_positions[stat["group"]] + variant_offsets.get(stat["variant"], 0.0)
+        obs = stat["observed"]
         ax.scatter(
             pos,
             obs,
             color="crimson",
             marker="D",
             s=60,
-            label="Observed MMD$^2$" if idx == 0 else None,
         )
-        ax.text(pos, obs, f"{obs:.3g}", ha="center", va="bottom", fontweight="bold")
-
-    handles, legend_labels = ax.get_legend_handles_labels()
-    if handles:
-        ax.legend(handles, legend_labels, loc="best")
-
-    formatted_labels = []
-    for label, p_val in zip(labels, p_values):
-        if p_val is not None:
-            formatted_labels.append(f"{label}\n(p={p_val:.3f})")
+        if stat["p_value"] is not None:
+            text = f"p={stat['p_value']:.3f}"
         else:
-            formatted_labels.append(label)
+            text = "p=n/a"
+        text_offset = abs(obs) * 0.05 + 1e-4
+        ax.text(
+            pos,
+            obs + text_offset,
+            text,
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
 
-    ax.set_xticklabels(formatted_labels, rotation=15, ha="right")
+    ax.set_xticks(list(group_positions.values()))
+    ax.set_xticklabels(labels, rotation=15, ha="right")
+
+    if any(stat["perm_values"].size for stat in stats):
+        ax.legend(legend_handles, legend_labels, loc="upper left", frameon=True)
+    else:
+        ax.legend([observed_handle], ["Observed MMD$^2$"], loc="upper left", frameon=True)
 
     plt.tight_layout()
     return fig
