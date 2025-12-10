@@ -208,20 +208,29 @@ def composite_metric(arr_real, arr_synth, arr_featuresReal, arr_timeFeaturesReal
         composite_metric.feature_means = feature_means
         composite_metric.feature_stds_inverted = feature_stds_inverted
         
-    # Z-score normalize each feature using reference statistics
+    # Z-score normalize BOTH real and synthetic features using the same reference statistics
+    normalized_real_features = (arr_featuresReal - composite_metric.feature_means) * composite_metric.feature_stds_inverted
     normalized_synth_features = (arr_featuresSynth - composite_metric.feature_means) * composite_metric.feature_stds_inverted
     
     # Check for NaN values after normalization
+    if np.isnan(normalized_real_features).any():
+        print("Warning: NaN values detected in normalized real features")
+        return 1.0
     if np.isnan(normalized_synth_features).any():
-        print("Warning: NaN values detected after feature normalization")
+        print("Warning: NaN values detected in normalized synthetic features")
         return 1.0
      
+    # Calculate statistics for both real and synthetic normalized features
+    real_feature_stats = np.concatenate([
+        np.mean(normalized_real_features, axis=1),  # Mean of each feature
+        np.std(normalized_real_features, axis=1)    # Std of each feature
+    ])
+    
     synth_feature_stats = np.concatenate([
         np.mean(normalized_synth_features, axis=1),  # Mean of each feature
         np.std(normalized_synth_features, axis=1)    # Std of each feature
     ])
-
-    real_feature_stats = np.ones(shape=synth_feature_stats.shape)
+    
     # MSE between real and synthetic feature statistics (all equally weighted)
     profileFeaturesDistance = np.mean((real_feature_stats - synth_feature_stats)**2)
     
