@@ -5,7 +5,6 @@ from model.data_manip import get_sep
 from main import run
 from model.utils import filter_profiles_with_extreme_peaks, split_data_train_test
 
-
 ####################################################################################################
 
 # Model type ('GAN' or 'WGAN')
@@ -14,10 +13,16 @@ MODEL_TYPE = 'WGAN'
 # ──────────────────────────────────────────────────────────────────────────────────────────
 
 # Project name
-PROJECT_NAME = 'WGAN_final_all'
+PROJECT_NAME = 'test'
 
 # Input file path
-INPUT_PATH = Path.cwd() / 'data' / "sample_data" / "opendata_fluvius" / "fluvius_wide_format.csv"
+INPUT_PATH = (
+    Path.cwd()
+    / 'data'
+    / 'sample_data'
+    / 'opendata_fluvius'
+    / 'P6269_1_50_DMK_Sample_Elek_Volume_Afname_kWh_HP_resampled.csv'
+)
 
 # Output file format ('npy', 'csv' or 'xlsx')
 OUTPUT_FORMAT = '.npy'
@@ -26,34 +31,25 @@ OUTPUT_FORMAT = '.npy'
 LOG_STATS = True
 
 # Use Wandb (if True, metric will be tracked online; Wandb account required)
-USE_WANDB = True
+USE_WANDB = False
 
 # Set the number of epochs
-EPOCH_COUNT = 5_000
+EPOCH_COUNT = 5
 
 # Change the result save frequency; save all samples/models in addition to visualizations
-SAVE_FREQ = 50000000
+SAVE_FREQ = 10_000
 SAVE_MODELS = True
 SAVE_PLOTS = True
 SAVE_SAMPLES = True
-CHECK_FOR_MIN_STATS = 10   #after these epochs, runs with lower stats than the current minimum are plotted
+CHECK_FOR_MIN_STATS = 10    #after these epochs, runs with lower stats than the current minimum are plotted
 
 ####################################################################################################
 
 # Model state path (optional, for continuation of training or generation of data)
-MODEL_PATH = Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt"
-
-create_data_paths = [
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV/gentle-wave-384_2025-05-17-101257896/models/epoch_700") / "epoch_700.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_EV+PV/fallen-dragon-385_2025-05-17-101846469/models/epoch_1240") / "epoch_1240.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_heat pump+PV/leafy-planet-380_2025-05-16-231239663/models/epoch_8906") / "epoch_8906.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_PV/restful-valley-381_2025-05-16-231909605/models/epoch_328") / "epoch_328.pt",
-    Path(r"/home/users/pmascherbauer/projects4/workspace_philippm/Synthetic-Load-Profiles/runs/WGAN_final_standard/decent-star-383_2025-05-16-232346722/models/epoch_2847") / "epoch_2847.pt",
-
-]
+MODEL_PATH = False
 
 # Create synthetic data from existing model (if True, there is no training)
-CREATE_DATA = True
+CREATE_DATA = False
 
 # ==========================================================================================
 #                                        MAIN SCRIPT
@@ -82,14 +78,12 @@ if __name__ == '__main__':
 
     train_data, test_data = split_data_train_test(inputFile, train_ratio=0.8, random_state=42)
     
-    # for generation_nr in [100, 300, 1000, 5000, 50_000, 100_000]:
     run(params, MODEL_TYPE, PROJECT_NAME, 
-        train_data=train_data, 
-        logStats=LOG_STATS, 
-        useWandb=USE_WANDB, 
-        modelPath=[MODEL_PATH], 
-        createData=CREATE_DATA, 
-        useMarimo=False,
+        train_data = train_data, 
+        logStats = LOG_STATS, 
+        useWandb = USE_WANDB, 
+        modelPath = [MODEL_PATH] if MODEL_PATH else None,
+        createData = CREATE_DATA,
+        useMarimo = False,
         generate_n_profiles = 10_000, 
-        test_data=test_data)
-    
+        test_data = test_data)

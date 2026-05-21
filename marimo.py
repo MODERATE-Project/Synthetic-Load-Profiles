@@ -50,7 +50,7 @@ def _(mo):
     projectName = mo.ui.text(label = 'Project name:')
     inputFileLabel = mo.md('Input data:')
     inputFile = mo.ui.file(label = 'Upload', filetypes = ['.csv'])
-    outputFormat = mo.ui.dropdown(options = ['.npy', '.csv', '.xslx'], value = '.npy', label = 'Output file format:')
+    outputFormat = mo.ui.dropdown(options = ['.npy', '.csv', '.xlsx'], value = '.npy', label = 'Output file format:')
     logStats = mo.ui.radio(options = ['no', 'yes'], value = 'yes', inline = True, label = 'Log stats:')
     useWandb = mo.ui.radio(options = ['off', 'on'], value = 'off', inline = True, label = 'Wandb:')
     epochCount = mo.ui.number(start = 1, step = 1, value = 100, label = 'Number of epochs:')
@@ -58,7 +58,7 @@ def _(mo):
     saveModels = mo.ui.radio(options = ['no', 'yes'], value = 'no', inline = True, label = 'Save models:')
     savePlots = mo.ui.radio(options = ['no', 'yes'], value = 'yes', inline = True, label = 'Save plots:')
     saveSamples = mo.ui.radio(options = ['no', 'yes'], value = 'no', inline = True, label = 'Save samples:')
-    checkForMinStats = mo.ui.number(start = 1, step = 1, value = 100, label = 'Check for improving metric after this epoch:')
+    checkForMinStats = mo.ui.number(start = 0, step = 1, value = 100, label = 'Check for improving metric after this epoch:')
     # Work with existing model
     modelFileLabel = mo.md('Model:')
     modelFile = mo.ui.file_browser(label = 'Upload', multiple = False)
@@ -226,23 +226,40 @@ def _(
             params['lrGen'] = float(lrGen.value)
             params['lrDis'] = float(lrDis.value)
             params['genLoopCount'] = loopCountGen.value
+            abort = False
             if inputFile.value:
                 inputFileProcd = read_csv(inputFile)
                 inputFileProcd.index = pd.to_datetime(inputFileProcd.index, format = 'mixed')
+                if inputFileProcd.isnull().any().any():
+                    print('Warning: NaN values detected in input file. Aborting.')
+                    abort = True
             else:
                 inputFileProcd = None
-            run(
-                params = params,
-                modelType = modelType.value,
-                projectName = projectName.value,
-                inputFile = inputFileProcd,
-                logStats = to_boolean(logStats.value),
-                useWandb = to_boolean(useWandb.value),
-                modelPath = modelFile.value[0].id if modelFile.value else None,
-                createData = to_boolean(createData.value),
-                useMarimo = True
-            )
-            print('Done!')
+            if not abort:
+                if to_boolean(logStats.value) and checkForMinStats.value >= epochCount.value:
+                    print(f'Warning: checkForMinStats ({checkForMinStats.value}) >= epochCount ({epochCount.value}); best-model saving will never activate.')
+                if modelFile.value and to_boolean(createData.value):
+                    from model.main import generate_data_from_saved_model, export_synthetic_data
+                    from pathlib import Path
+                    from datetime import datetime
+                    modelPath = modelFile.value[0].id
+                    outputPath = Path().absolute() / 'runs' / projectName.value / datetime.today().strftime('%Y-%m-%d-%H%M%S%f')[:-3]
+                    outputPath.mkdir(parents=True, exist_ok=True)
+                    X_synth = generate_data_from_saved_model(modelPath)
+                    export_synthetic_data(X_synth, outputPath, fileFormat=outputFormat.value)
+                else:
+                    run(
+                        params = params,
+                        modelType = modelType.value,
+                        projectName = projectName.value,
+                        train_data = inputFileProcd,
+                        logStats = to_boolean(logStats.value),
+                        useWandb = to_boolean(useWandb.value),
+                        modelPath = modelFile.value[0].id if modelFile.value else None,
+                        createData = to_boolean(createData.value),
+                        useMarimo = True
+                    )
+                print('Done!')
     return inputFileProcd, params
 
 
