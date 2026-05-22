@@ -110,7 +110,12 @@ class GAN(nn.Module):
 
         # Continue training existing model
         if self.modelStatePath:
-            self.modelState = torch.load(self.modelStatePath, weights_only = False)
+            map_location = None if torch.cuda.is_available() else self.device
+            try:
+                with gzip.open(self.modelStatePath, 'rb') as f:
+                    self.modelState = torch.load(f, weights_only=False, map_location=map_location)
+            except gzip.BadGzipFile:
+                self.modelState = torch.load(self.modelStatePath, weights_only=False, map_location=map_location)
             if not (self.dfIdx == self.modelState['dfIdx']).all():
                 raise ValueError('Timestamps do not match!')
             print('Successfully imported existing model!')
@@ -548,14 +553,19 @@ class GAN(nn.Module):
 
 def generate_data_from_saved_model(modelStatePath, n_profiles=None):
     try:
-        # import gzip
-        # with gzip.open(modelStatePath, 'rb') as f:
-        #     modelState = torch.load(f, weights_only = False)
-        modelState = torch.load(modelStatePath, weights_only = False)
+        import gzip
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        map_location = None if torch.cuda.is_available() else device
+        try:
+            with gzip.open(modelStatePath, 'rb') as f:
+                modelState = torch.load(f, weights_only=False, map_location=map_location)
+        except gzip.BadGzipFile:
+            modelState = torch.load(modelStatePath, weights_only=False, map_location=map_location)
         print(f"Successfully loaded model from {modelStatePath}")
         
         Gen = Generator(modelState['gen_layers'])
         Gen.load_state_dict(modelState['gen_state_dict'])
+        Gen.to(device)
         Gen.eval()
         
         # Use n_profiles if specified, otherwise use the original profileCount
@@ -572,13 +582,13 @@ def generate_data_from_saved_model(modelStatePath, n_profiles=None):
                 end_idx = min((i + 1) * batch_size, profile_count)
                 current_batch_size = end_idx - start_idx
                 
-                noise = randn(current_batch_size, modelState['dimNoise'], 1, 1, device = modelState['device'])
+                noise = randn(current_batch_size, modelState['dimNoise'], 1, 1, device=device)
                 xSynth_batch = Gen(noise)
                 xSynth_batch = xSynth_batch.cpu().numpy()  # Move to CPU immediately
                 xSynth_list.append(xSynth_batch)
-                
+
                 # Free memory
-                if modelState['device'].type == 'cuda':
+                if device.type == 'cuda':
                     torch.cuda.empty_cache()
         
         # Combine batches

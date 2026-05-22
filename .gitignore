@@ -23,3 +23,5 @@ wandb/
 *.pkl
 
 !readme/Example_CSV_structure.png
+!runs
+!runs/example_London_WGAN_80_20_kicked_out_max_95_percentile/**

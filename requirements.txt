@@ -8,6 +8,7 @@ numba==0.61.0
 numpy==1.26.3
 pandas==2.1.1
 pyarrow==24.0.0
+scikit-learn==1.7.0
 scipy==1.15.1
 seaborn==0.13.2
 tqdm==4.66.1
